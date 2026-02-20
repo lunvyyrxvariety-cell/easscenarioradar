@@ -1,0 +1,967 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>EAS Scenario Map (Fake Radar + Robust County Polygon)</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    :root{
+      --bg:#070b14;
+      --shadow:0 14px 34px rgba(0,0,0,.28);
+      --radius:16px;
+      --gap:10px;
+      --btn:#2563eb;
+      --btnText:#fff;
+      --danger:#ef4444;
+      --dangerText:#fff;
+      --ok:#10b981;
+      --okText:#06281d;
+      font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    }
+    html,body{height:100%; margin:0; background:var(--bg);}
+    .app{height:100%; display:grid; grid-template-rows:auto 1fr;}
+    header{
+      background: rgba(2,6,23,.78);
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid rgba(255,255,255,.08);
+      padding:12px clamp(12px,2vw,18px);
+      color: rgba(255,255,255,.92);
+    }
+    .top{display:flex; gap:var(--gap); flex-wrap:wrap; align-items:end;}
+    .brand{min-width:250px}
+    .brand b{display:block; font-size:14px}
+    .brand small{opacity:.82; display:block; margin-top:2px; font-size:12px; line-height:1.25}
+
+    .ctrl{display:flex; flex-direction:column; gap:6px; min-width:190px}
+    .ctrl label{font-size:12px; opacity:.8}
+    select,input[type="text"], textarea{
+      height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.08);
+      color: rgba(255,255,255,.92);
+      padding:0 12px; outline:none;
+    }
+    input::placeholder{color: rgba(255,255,255,.55)}
+    .btns{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    button{
+      height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.92);
+      padding:0 12px; font-weight:800; cursor:pointer;
+      transition: transform .05s ease, box-shadow .2s ease;
+    }
+    button:hover{box-shadow: 0 10px 24px rgba(0,0,0,.25)}
+    button:active{transform: translateY(1px)}
+    .primary{background: var(--btn); color:var(--btnText); border-color: rgba(37,99,235,.6)}
+    .danger{background: var(--danger); color:var(--dangerText); border-color: rgba(239,68,68,.6)}
+    .ok{background: var(--ok); color:var(--okText); border-color: rgba(16,185,129,.6)}
+    .toggle{
+      display:flex; gap:8px; align-items:center;
+      height:40px; padding:0 10px;
+      border-radius:12px; border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.92);
+    }
+    .toggle input{width:18px;height:18px}
+    .sliderWrap{
+      display:flex; gap:8px; align-items:center;
+      height:40px; padding:0 10px;
+      border-radius:12px; border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.10);
+      color: rgba(255,255,255,.92);
+      min-width: 230px;
+    }
+    .sliderWrap input[type="range"]{width:130px}
+    .tiny{font-size:12px; opacity:.85}
+
+    main{
+      min-height:0;
+      padding: 12px clamp(12px,2vw,18px);
+      display:grid;
+      grid-template-columns: 1.4fr .6fr;
+      gap:var(--gap);
+    }
+    #mapWrap{position:relative; min-height:340px}
+    #map{
+      height:100%;
+      min-height:340px;
+      border-radius:var(--radius);
+      overflow:hidden;
+      box-shadow:var(--shadow);
+      border:1px solid rgba(255,255,255,.08);
+    }
+    .hud{
+      position:absolute; z-index:900; left:16px; top:16px;
+      background: rgba(255,255,255,.92); color:#0f172a;
+      border:1px solid rgba(15,23,42,.10); border-radius:999px;
+      padding:8px 10px; font-size:12px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.18);
+      max-width: min(820px, 92vw);
+      line-height:1.25;
+    }
+    .hud strong{font-weight:900}
+    .hud2{
+      position:absolute; z-index:900; left:16px; top:56px;
+      display:none;
+      background: rgba(255,255,255,.92); color:#0f172a;
+      border:1px solid rgba(15,23,42,.10); border-radius:999px;
+      padding:8px 10px; font-size:12px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.18);
+      max-width: min(820px, 92vw);
+      line-height:1.25;
+    }
+    .side{
+      min-height:0;
+      border-radius:var(--radius);
+      overflow:hidden;
+      box-shadow:var(--shadow);
+      border:1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.92);
+      display:grid;
+      grid-template-rows:auto auto 1fr;
+    }
+    .sideHeader{padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.10); display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap}
+    .sideHeader b{font-size:14px}
+    .sideBody{padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.10); font-size:12px; opacity:.92; line-height:1.35}
+    .list{padding:12px 14px; overflow:auto}
+    .county{
+      padding:10px 10px; border:1px solid rgba(255,255,255,.12);
+      border-radius:12px; margin-bottom:8px;
+      display:flex; justify-content:space-between; gap:10px; align-items:center;
+      background: rgba(0,0,0,.12);
+    }
+    .badge{font-size:11px; padding:4px 8px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.08)}
+    .row2{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px}
+    .file{display:none}
+    .debug{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size:11px;
+      white-space: pre-wrap;
+      background: rgba(0,0,0,.20);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 12px;
+      padding: 10px;
+      margin-top: 10px;
+      max-height: 240px;
+      overflow:auto;
+    }
+
+    @media (max-width: 980px){
+      main{grid-template-columns: 1fr; grid-template-rows: 1fr auto;}
+      .side{height:560px}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="top">
+      <div class="brand">
+        <b>EAS Scenario Map</b>
+        <small>
+          Fake radar: <b>offline</b> • County polygon: Nominatim boundary (online) with pick-list fallback • Basemaps: OSM/CARTO/Esri
+        </small>
+      </div>
+
+      <div class="ctrl">
+        <label>Basemap</label>
+        <select id="basemap">
+          <option value="osm">OSM Standard (Light)</option>
+          <option value="carto_light">CARTO Positron (Light)</option>
+          <option value="carto_dark">CARTO Dark Matter (Dark)</option>
+          <option value="esri_sat">Esri World Imagery (Satellite)</option>
+        </select>
+      </div>
+
+      <div class="ctrl">
+        <label>Fake radar</label>
+        <select id="radarMode">
+          <option value="off">Off</option>
+          <option value="on">On</option>
+          <option value="animate">Animate</option>
+        </select>
+      </div>
+
+      <div class="sliderWrap" title="Radar opacity">
+        <span class="tiny">Opacity</span>
+        <input id="radarOpacity" type="range" min="0" max="100" value="60" />
+        <span class="tiny" id="radarOpacityLbl">60%</span>
+      </div>
+
+      <div class="ctrl">
+        <label>Alert type</label>
+        <select id="alertType">
+          <option value="TOR_WARN">Tornado Warning</option>
+          <option value="TOR_WATCH">Tornado Watch</option>
+          <option value="SVR_WARN">Severe Thunderstorm Warning</option>
+          <option value="SVR_WATCH">Severe Thunderstorm Watch</option>
+          <option value="WWA">Winter Weather Advisory</option>
+          <option value="WS_WATCH">Winter Storm Watch</option>
+          <option value="WS_WARN">Winter Storm Warning</option>
+          <option value="BLIZZ">Blizzard Warning</option>
+          <option value="FFW">Flash Flood Warning</option>
+          <option value="SMW">Special Marine Warning</option>
+        </select>
+      </div>
+
+      <div class="ctrl">
+        <label>Headline (optional)</label>
+        <input id="headline" type="text" placeholder="e.g., OBSERVED TORNADO" />
+      </div>
+
+      <div class="btns">
+        <div class="toggle" title="PDS uses your flashing/color rules">
+          <input id="pds" type="checkbox" />
+          <label for="pds">PDS</label>
+        </div>
+
+        <button class="primary" id="draw">Draw polygon</button>
+        <button id="finish">Finish</button>
+        <button id="undo">Undo</button>
+        <button class="primary" id="issue">Issue alert</button>
+        <button class="danger" id="clear">Clear</button>
+      </div>
+    </div>
+
+    <div class="top" style="margin-top:10px">
+      <div class="ctrl" style="min-width:360px">
+        <label>Auto polygon from county + state (flexible; picks best boundary, or lets you choose)</label>
+        <input id="countyQuery" type="text" placeholder="Examples: North Fulton, GA • fulton county georgia • SOUTH miami-dade florida" />
+      </div>
+      <div class="btns">
+        <button class="ok" id="makeCountyPoly">Search polygon</button>
+      </div>
+
+      <div class="ctrl" style="min-width:300px">
+        <label>Pick result (if needed)</label>
+        <select id="pickResult">
+          <option value="">(none)</option>
+        </select>
+      </div>
+      <div class="btns">
+        <button id="applyPick">Apply picked polygon</button>
+      </div>
+
+      <div class="btns">
+        <button id="exportAlert">Export alert JSON</button>
+        <button id="importAlert">Import alert JSON</button>
+        <input class="file" id="importFile" type="file" accept=".json,application/json" />
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div id="mapWrap">
+      <div class="hud" id="hud"><strong>Tip:</strong> Fake radar is procedural (offline). County boundary lookup needs internet. If search fails, use the pick dropdown.</div>
+      <div class="hud2" id="hud2"></div>
+      <div id="map"></div>
+    </div>
+
+    <div class="side">
+      <div class="sideHeader">
+        <div>
+          <b>Debug + Offline County List</b><br/>
+          <small id="countLabel" style="opacity:.8">0 listed</small>
+        </div>
+        <div class="tiny" style="opacity:.85">Optional GeoJSON list</div>
+      </div>
+
+      <div class="sideBody" id="countiesHint">
+        Offline county listing: load a counties <b>FeatureCollection GeoJSON</b> and it will list counties whose <b>centroid</b> is inside the alert polygon.
+        <div class="row2">
+          <button id="loadCounties">Load counties GeoJSON</button>
+          <input class="file" id="countiesFile" type="file" accept=".json,.geojson,application/json" />
+        </div>
+
+        <div class="debug" id="debugBox">Debug log will appear here…</div>
+      </div>
+
+      <div class="list" id="list"><div style="opacity:.8;font-size:12px">None</div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ---------------- Basemaps ---------------- */
+const map = L.map('map', { zoomControl:true }).setView([39.5, -98.35], 4);
+
+const layers = {
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }),
+  carto_light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }),
+  carto_dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }),
+  esri_sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' })
+};
+layers.osm.addTo(map);
+
+document.getElementById('basemap').addEventListener('change', (e)=>{
+  const v = e.target.value;
+  Object.values(layers).forEach(l => map.removeLayer(l));
+  layers[v].addTo(map);
+});
+
+/* ---------------- Debug helpers ---------------- */
+const debugBox = document.getElementById('debugBox');
+function logDebug(msg){
+  const t = new Date().toLocaleTimeString();
+  debugBox.textContent = `[${t}] ${msg}\n` + debugBox.textContent;
+}
+function clearDebug(){ debugBox.textContent = ''; }
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+}
+
+/* ---------------- HUD helpers ---------------- */
+const hud2 = document.getElementById('hud2');
+function setHud2(html){
+  hud2.style.display = html ? 'block' : 'none';
+  hud2.innerHTML = html || '';
+}
+function toast(msg){
+  setHud2(`<strong>Status:</strong> ${escapeHtml(msg)}`);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>setHud2(''), 5200);
+}
+
+/* ---------------- Fake Radar (OFFLINE) ---------------- */
+let fakeRadar = null;
+let fakeRadarTicker = 0;
+let fakeRadarTimer = null;
+let fakeRadarOpacity = 0.60;
+
+const radarModeEl = document.getElementById('radarMode');
+const radarOpacityEl = document.getElementById('radarOpacity');
+const radarOpacityLbl = document.getElementById('radarOpacityLbl');
+
+radarOpacityEl.addEventListener('input', ()=>{
+  fakeRadarOpacity = parseInt(radarOpacityEl.value,10)/100;
+  radarOpacityLbl.textContent = `${radarOpacityEl.value}%`;
+  if(fakeRadar) fakeRadar.setOpacity(fakeRadarOpacity);
+});
+
+radarModeEl.addEventListener('change', ()=>setFakeRadarMode(radarModeEl.value));
+
+function setFakeRadarMode(mode){
+  stopFakeRadar();
+  if(mode === 'off'){
+    if(fakeRadar){ map.removeLayer(fakeRadar); fakeRadar = null; }
+    return;
+  }
+  if(!fakeRadar){
+    fakeRadar = L.gridLayer({ zIndex: 320, opacity: fakeRadarOpacity });
+    fakeRadar.createTile = function(coords){
+      const tile = document.createElement('canvas');
+      const size = this.getTileSize();
+      tile.width = size.x;
+      tile.height = size.y;
+      drawFakeRadarTile(tile.getContext('2d'), coords.x, coords.y, coords.z, fakeRadarTicker);
+      return tile;
+    };
+    fakeRadar.addTo(map);
+  }else{
+    fakeRadar.setOpacity(fakeRadarOpacity);
+  }
+
+  if(mode === 'on'){
+    fakeRadarTicker = Math.floor(Date.now()/1000);
+    fakeRadar.redraw();
+  }else if(mode === 'animate'){
+    fakeRadarTimer = setInterval(()=>{
+      fakeRadarTicker += 1;
+      if(fakeRadar) fakeRadar.redraw();
+    }, 180);
+  }
+}
+function stopFakeRadar(){
+  if(fakeRadarTimer){ clearInterval(fakeRadarTimer); fakeRadarTimer = null; }
+}
+function clamp01(v){ return Math.max(0, Math.min(1, v)); }
+function drawFakeRadarTile(ctx, x, y, z, t){
+  const w = ctx.canvas.width, h = ctx.canvas.height;
+  ctx.clearRect(0,0,w,h);
+  function hash(n){ n = (n<<13) ^ n; return 1.0 - ((n*(n*n*15731 + 789221) + 1376312589) & 0x7fffffff)/1073741824.0; }
+  function noise2(ix, iy){
+    const n = (ix*374761393 + iy*668265263 + z*1442695041 + t*31) | 0;
+    return hash(n);
+  }
+  function smoothNoise(px, py){
+    const ix = Math.floor(px), iy = Math.floor(py);
+    const fx = px - ix, fy = py - iy;
+    const v00 = noise2(ix, iy);
+    const v10 = noise2(ix+1, iy);
+    const v01 = noise2(ix, iy+1);
+    const v11 = noise2(ix+1, iy+1);
+    const sx = fx*fx*(3-2*fx);
+    const sy = fy*fy*(3-2*fy);
+    const a = v00 + (v10 - v00)*sx;
+    const b = v01 + (v11 - v01)*sx;
+    return a + (b - a)*sy;
+  }
+  const driftX = (t*0.02) + (x*0.7);
+  const driftY = (t*0.015) + (y*0.7);
+
+  function colorFor(v){
+    if(v < 0.25) return null;
+    if(v < 0.38) return [40, 200, 60, 140];
+    if(v < 0.52) return [10, 160, 40, 170];
+    if(v < 0.65) return [240, 220, 40, 190];
+    if(v < 0.78) return [245, 140, 30, 205];
+    if(v < 0.88) return [240, 60, 60, 220];
+    return [200, 80, 255, 235];
+  }
+
+  const scale = 4;
+  const iw = Math.ceil(w/scale), ih = Math.ceil(h/scale);
+  const img = ctx.createImageData(iw, ih);
+
+  for(let j=0;j<ih;j++){
+    for(let i=0;i<iw;i++){
+      const gx = (x*iw + i)/18 + driftX;
+      const gy = (y*ih + j)/18 + driftY;
+
+      let v = 0;
+      v += 0.60 * smoothNoise(gx, gy);
+      v += 0.35 * smoothNoise(gx*2.1, gy*2.1);
+      v += 0.15 * smoothNoise(gx*4.2, gy*4.2);
+      v = (v + 1.4) / 2.8;
+
+      const band = 0.10*Math.sin((gx+gy)*1.8) + 0.06*Math.cos((gx-gy)*2.2);
+      v = clamp01(v + band);
+
+      const sparsity = clamp01((smoothNoise(gx*0.8 + 22, gy*0.8 - 9)+1)/2);
+      v *= (0.55 + 0.75*sparsity);
+
+      const c = colorFor(v);
+      const idx = (j*iw + i)*4;
+      if(!c){
+        img.data[idx+3] = 0;
+      }else{
+        img.data[idx+0]=c[0];
+        img.data[idx+1]=c[1];
+        img.data[idx+2]=c[2];
+        img.data[idx+3]=c[3];
+      }
+    }
+  }
+
+  const tmp = document.createElement('canvas');
+  tmp.width = iw; tmp.height = ih;
+  tmp.getContext('2d').putImageData(img,0,0);
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(tmp, 0,0, iw,ih, 0,0, w,h);
+
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = '#ffffff';
+  for(let yy=0; yy<h; yy+=8){
+    ctx.fillRect(0, yy + ((t*2) % 8), w, 1);
+  }
+  ctx.restore();
+}
+
+/* ---------------- Alert styling rules ---------------- */
+const ALERTS = {
+  TOR_WARN: { normal: {a:'#ff0000'}, pds: {a:'#7e22ce'} },
+  TOR_WATCH:{ normal: {a:'#ffff00'}, pds: {a:'#ffff00', b:'#7e22ce', flash:true} },
+  SVR_WARN: { normal: {a:'#ff7a00'}, pds: {a:'#ff7a00', b:'#7e22ce', flash:true} },
+  SVR_WATCH:{ normal: {a:'#ffb36b'}, pds: {a:'#ffb36b', b:'#7e22ce', flash:true} },
+  WWA:      { normal: {a:'#9bdcff'} },
+  WS_WATCH: { normal: {a:'#00ffff'} },
+  WS_WARN:  { normal: {a:'#ffffff'} },
+  BLIZZ:    { normal: {a:'#0066ff'} },
+  FFW:      { normal: {a:'#1e4aa8'} },
+  SMW:      { normal: {a:'#001a66'} }
+};
+function getPaint(type, pds){
+  const def = ALERTS[type] || {normal:{a:'#ff00ff'}};
+  return (pds && def.pds) ? def.pds : def.normal;
+}
+function labelOf(t){
+  return ({
+    TOR_WARN:'Tornado Warning',
+    TOR_WATCH:'Tornado Watch',
+    SVR_WARN:'Severe Thunderstorm Warning',
+    SVR_WATCH:'Severe Thunderstorm Watch',
+    WWA:'Winter Weather Advisory',
+    WS_WATCH:'Winter Storm Watch',
+    WS_WARN:'Winter Storm Warning',
+    BLIZZ:'Blizzard Warning',
+    FFW:'Flash Flood Warning',
+    SMW:'Special Marine Warning'
+  })[t] || t;
+}
+
+/* ---------------- Draw polygon (manual) ---------------- */
+map.doubleClickZoom.disable();
+let drawing = false;
+let points = [];
+let tempLine = null;
+let tempPoly = null;
+
+function redrawTemp(){
+  if(tempLine) map.removeLayer(tempLine), tempLine=null;
+  if(tempPoly) map.removeLayer(tempPoly), tempPoly=null;
+  if(points.length >= 2) tempLine = L.polyline(points, {color:'#111827', weight:3, dashArray:'10 8'}).addTo(map);
+  if(points.length >= 3) tempPoly = L.polygon(points, {color:'#111827', weight:3, dashArray:'10 8', fillColor:'#111827', fillOpacity:0.12}).addTo(map);
+}
+document.getElementById('draw').addEventListener('click', ()=>{
+  drawing = true; points = []; redrawTemp();
+  setHud2(`<strong>Drawing:</strong> click map to add points • double-click to finish`);
+});
+map.on('click', (e)=>{
+  if(!drawing) return;
+  points.push(e.latlng);
+  redrawTemp();
+});
+map.on('dblclick', ()=>{
+  if(!drawing) return;
+  finishDrawing(true);
+});
+function finishDrawing(silent=false){
+  if(points.length < 3){ if(!silent) toast('Need 3+ points to finish polygon.'); return; }
+  drawing = false; redrawTemp();
+  if(!silent) toast('Polygon finished. Click “Issue alert”.');
+}
+document.getElementById('finish').addEventListener('click', ()=>finishDrawing(false));
+document.getElementById('undo').addEventListener('click', ()=>{
+  if(!points.length) return;
+  points.pop(); redrawTemp();
+});
+
+/* ---------------- Issued alert polygon + flashing ---------------- */
+let issued = null;
+function clearIssued(){
+  if(issued?.polyLayer) map.removeLayer(issued.polyLayer);
+  if(issued?.flashTimer) clearInterval(issued.flashTimer);
+  issued = null;
+}
+function latLngsToLonLat(latlngs){ return latlngs.map(ll => [ll.lng, ll.lat]); }
+
+document.getElementById('issue').addEventListener('click', ()=>{
+  if(points.length < 3){ toast('Need 3+ points to issue an alert.'); return; }
+  finishDrawing(true);
+  issueFromLatLngs(points);
+});
+function issueFromLatLngs(latlngs){
+  clearIssued();
+  const type = document.getElementById('alertType').value;
+  const pds  = document.getElementById('pds').checked;
+  const headline = document.getElementById('headline').value.trim();
+  const paint = getPaint(type, pds);
+  const coordsLonLat = latLngsToLonLat(latlngs);
+
+  let phase = true;
+  const polyLayer = L.polygon(latlngs, { color: paint.a, weight: 4, fillColor: paint.a, fillOpacity: 0.30 }).addTo(map);
+  const applyStyle = ()=>{
+    const col = phase ? paint.a : (paint.b || paint.a);
+    polyLayer.setStyle({ color: col, fillColor: col });
+  };
+  issued = { type, pds, headline, polyLayer, coordsLonLat, flashTimer:null };
+  if(paint.flash){
+    issued.flashTimer = setInterval(()=>{ phase=!phase; applyStyle(); }, 450);
+  }
+  const title = labelOf(type) + (pds ? ' • PDS' : '');
+  setHud2(`<strong>${escapeHtml(title)}</strong>${headline ? ' • '+escapeHtml(headline) : ''}`);
+  computeCountiesOffline();
+}
+document.getElementById('clear').addEventListener('click', ()=>{
+  drawing=false; points=[]; redrawTemp(); clearIssued(); renderCountyList([]); setHud2('');
+});
+
+/* ---------------- Export / Import alert JSON ---------------- */
+document.getElementById('exportAlert').addEventListener('click', ()=>{
+  if(!issued){ toast('No issued alert to export.'); return; }
+  const out = { version: 3, type: issued.type, pds: issued.pds, headline: issued.headline || '', polygon_lonlat: issued.coordsLonLat, created_at: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `eas-alert-${Date.now()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Exported alert JSON.');
+});
+document.getElementById('importAlert').addEventListener('click', ()=>document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0]; if(!f) return;
+  try{
+    const json = JSON.parse(await f.text());
+    const poly = json?.polygon_lonlat;
+    if(!Array.isArray(poly) || poly.length < 3) throw new Error('polygon_lonlat must be an array of 3+ [lon,lat] points.');
+    const latlngs = poly.map(p => L.latLng(p[1], p[0]));
+    map.fitBounds(L.polygon(latlngs).getBounds(), {padding:[20,20]});
+    if(json.type) document.getElementById('alertType').value = json.type;
+    document.getElementById('pds').checked = !!json.pds;
+    document.getElementById('headline').value = json.headline || '';
+    issueFromLatLngs(latlngs);
+    toast('Imported and issued alert from JSON.');
+  }catch(err){
+    toast('Import failed: ' + err.message);
+  }finally{ e.target.value=''; }
+});
+
+/* ---------------- Robust County auto polygon (ONLINE) ----------------
+   Strategy:
+   - Parse "direction county, state" (any casing)
+   - Try several Nominatim queries
+   - Populate pick-list with the top 8 boundary/admin results that include geojson
+   - Auto-apply best-scoring result, but you can manually pick.
+*/
+const pickSelect = document.getElementById('pickResult');
+let lastSearchResults = [];
+
+document.getElementById('makeCountyPoly').addEventListener('click', async ()=>{
+  clearDebug();
+  pickSelect.innerHTML = '<option value="">(none)</option>';
+  lastSearchResults = [];
+
+  const raw = document.getElementById('countyQuery').value;
+  const parsed = normalizeCountyState(raw);
+  logDebug(`Input: "${raw}"`);
+  logDebug(`Parsed county="${parsed.county}", state="${parsed.state}"`);
+  if(!parsed.state || !parsed.county){
+    toast('Type something like: "Fulton, GA" or "North Fulton County, Georgia".');
+    return;
+  }
+
+  try{
+    toast('Searching boundaries…');
+
+    const queries = buildCountyQueries(parsed);
+    logDebug('Query attempts:');
+    queries.forEach((q,i)=>logDebug(`  ${i+1}. ${q}`));
+
+    const all = [];
+    for(const q of queries){
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&polygon_geojson=1&limit=10&q=${encodeURIComponent(q)}`;
+      const res = await fetchJson(url);
+      logDebug(`Returned ${res.length} results for: ${q}`);
+      for(const r of res) all.push(r);
+      if(all.length >= 30) break;
+    }
+
+    if(!all.length) throw new Error('No results returned (are you offline?).');
+
+    // Filter to useful candidates (must have geojson)
+    const candidates = all
+      .filter(r => r && r.geojson && r.display_name)
+      .map(r => ({ r, score: scoreCountyResult(r, parsed) }))
+      .sort((a,b)=>b.score-a.score);
+
+    logDebug(`Candidates with geojson: ${candidates.length}`);
+    candidates.slice(0,12).forEach((c,i)=>{
+      logDebug(`#${i+1} score=${c.score.toFixed(1)} class=${c.r.class} type=${c.r.type} name=${c.r.display_name}`);
+    });
+
+    // Populate picker (top 8)
+    lastSearchResults = candidates.slice(0,8).map(c => c.r);
+    for(let i=0;i<lastSearchResults.length;i++){
+      const r = lastSearchResults[i];
+      const label = `${i+1}. ${shorten(r.display_name, 80)}  [${r.class}/${r.type}]`;
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = label;
+      pickSelect.appendChild(opt);
+    }
+
+    if(!lastSearchResults.length) throw new Error('Found results, but none with polygon geometry.');
+
+    // Auto-apply top result if score is decent
+    const best = lastSearchResults[0];
+    if(scoreCountyResult(best, parsed) < 40){
+      toast('Found results, but match confidence is low. Use “Pick result” dropdown.');
+      return;
+    }
+    applyCountyResult(best);
+    toast(`Loaded polygon (auto): ${parsed.county}, ${parsed.state}.`);
+  }catch(err){
+    toast('County polygon error: ' + err.message);
+    logDebug('ERROR: ' + err.message);
+  }
+});
+
+document.getElementById('applyPick').addEventListener('click', ()=>{
+  const idx = pickSelect.value;
+  if(idx === '' || !lastSearchResults.length){
+    toast('No picked result to apply.');
+    return;
+  }
+  const r = lastSearchResults[Number(idx)];
+  if(!r) { toast('Pick not found.'); return; }
+  applyCountyResult(r);
+  toast('Applied picked polygon.');
+});
+
+function applyCountyResult(result){
+  const gj = result.geojson;
+  const latlngs = geojsonToLatLngs(gj);
+  if(!latlngs || latlngs.length < 3) throw new Error('Boundary geometry missing/unsupported.');
+  drawing = false;
+  points = latlngs;
+  redrawTemp();
+  map.fitBounds(L.polygon(points).getBounds(), {padding:[20,20]});
+  logDebug('Applied polygon points: ' + points.length);
+}
+
+function shorten(s, n){ s=String(s); return s.length>n ? s.slice(0,n-1)+'…' : s; }
+
+function buildCountyQueries(parsed){
+  // Create several variations that help Nominatim find boundary polygons.
+  const baseCountyNoSuffix = parsed.county.replace(/\s+County$/i,'').trim();
+  const state = parsed.state;
+  return [
+    `${baseCountyNoSuffix} County, ${state}, USA`,
+    `${baseCountyNoSuffix}, ${state}, USA`,
+    `${baseCountyNoSuffix} County, ${state}`,
+    `${baseCountyNoSuffix}, ${state}`,
+    `${parsed.county}, ${state}, USA`,
+  ];
+}
+
+function scoreCountyResult(r, parsed){
+  const disp = String(r.display_name || '').toLowerCase();
+  const cls = String(r.class || '').toLowerCase();
+  const typ = String(r.type || '').toLowerCase();
+
+  const countyBase = parsed.county.toLowerCase().replace(/\s+county$/,'').trim();
+  const state = parsed.state.toLowerCase().trim();
+
+  let score = 0;
+
+  // Strongly prefer boundary/admin
+  if(cls === 'boundary') score += 50;
+  if(typ === 'administrative') score += 50;
+
+  // Must include state
+  if(disp.includes(state)) score += 35;
+
+  // Name match
+  if(disp.includes(countyBase)) score += 25;
+  if(disp.includes(countyBase + ' county')) score += 20;
+
+  // Also check addressdetails if present
+  if(r.address){
+    const a = r.address;
+    const aState = (a.state || a.state_code || '').toLowerCase();
+    if(aState && state.includes(aState)) score += 20;
+    const aCounty = (a.county || '').toLowerCase();
+    if(aCounty.includes(countyBase)) score += 20;
+  }
+
+  // Prefer USA
+  if(disp.includes('united states')) score += 8;
+
+  // Prefer higher importance
+  if(typeof r.importance === 'number') score += r.importance * 10;
+
+  return score;
+}
+
+function normalizeCountyState(input){
+  let s = String(input || '').trim().replace(/\s+/g,' ');
+  if(!s) return {county:'', state:''};
+
+  // If comma exists, split at first comma for county, rest for state
+  let countyPart = '', statePart = '';
+  if(s.includes(',')){
+    const idx = s.indexOf(',');
+    countyPart = s.slice(0, idx).trim();
+    statePart  = s.slice(idx+1).trim();
+  }else{
+    // Without comma: attempt to detect state at end (abbr or last 2-3 tokens)
+    const tokens = s.split(' ');
+    if(tokens.length < 2) return {county:s, state:''};
+
+    const last1 = tokens.slice(-1).join(' ');
+    const last2 = tokens.slice(-2).join(' ');
+    const last3 = tokens.slice(-3).join(' ');
+    const st3 = normalizeState(last3);
+    const st2 = normalizeState(last2);
+    const st1 = normalizeState(last1);
+
+    if(st3){ statePart = last3; countyPart = tokens.slice(0,-3).join(' '); }
+    else if(st2){ statePart = last2; countyPart = tokens.slice(0,-2).join(' '); }
+    else if(st1){ statePart = last1; countyPart = tokens.slice(0,-1).join(' '); }
+    else{
+      // give up; treat last token as state anyway
+      statePart = last1;
+      countyPart = tokens.slice(0,-1).join(' ');
+    }
+  }
+
+  let state = normalizeState(statePart) || titleCase(statePart);
+
+  let county = String(countyPart || '').trim();
+  // strip leading direction words
+  county = county.replace(/^(north|south|east|west|northeast|northwest|southeast|southwest|ne|nw|se|sw)\s+/i,'');
+  // If user typed only direction, fallback
+  if(!county) county = countyPart;
+
+  // Ensure "County" suffix (helps)
+  if(!/county$/i.test(county)) county = county + ' County';
+  county = titleCase(county);
+
+  return {county, state};
+}
+function titleCase(s){
+  return String(s || '').toLowerCase().replace(/\b([a-z])/g, m=>m.toUpperCase());
+}
+const STATE_ABBR = {
+  AL:'Alabama', AK:'Alaska', AZ:'Arizona', AR:'Arkansas', CA:'California', CO:'Colorado', CT:'Connecticut', DE:'Delaware',
+  FL:'Florida', GA:'Georgia', HI:'Hawaii', ID:'Idaho', IL:'Illinois', IN:'Indiana', IA:'Iowa', KS:'Kansas', KY:'Kentucky',
+  LA:'Louisiana', ME:'Maine', MD:'Maryland', MA:'Massachusetts', MI:'Michigan', MN:'Minnesota', MS:'Mississippi', MO:'Missouri',
+  MT:'Montana', NE:'Nebraska', NV:'Nevada', NH:'New Hampshire', NJ:'New Jersey', NM:'New Mexico', NY:'New York', NC:'North Carolina',
+  ND:'North Dakota', OH:'Ohio', OK:'Oklahoma', OR:'Oregon', PA:'Pennsylvania', RI:'Rhode Island', SC:'South Carolina',
+  SD:'South Dakota', TN:'Tennessee', TX:'Texas', UT:'Utah', VT:'Vermont', VA:'Virginia', WA:'Washington', WV:'West Virginia',
+  WI:'Wisconsin', WY:'Wyoming', DC:'District Of Columbia'
+};
+function normalizeState(s){
+  let t = String(s || '').trim();
+  if(!t) return null;
+  t = t.replace(/\./g,'').trim();
+  const up = t.toUpperCase();
+  if(STATE_ABBR[up]) return STATE_ABBR[up];
+  const tc = titleCase(t);
+  for(const v of Object.values(STATE_ABBR)){
+    if(v.toLowerCase() === tc.toLowerCase()) return v;
+  }
+  return null;
+}
+function geojsonToLatLngs(gj){
+  if(!gj || !gj.type) return null;
+  if(gj.type === 'Polygon'){
+    const ring = gj.coordinates?.[0];
+    return ring ? ring.map(([lon,lat])=>L.latLng(lat,lon)) : null;
+  }
+  if(gj.type === 'MultiPolygon'){
+    let bestRing = null;
+    for(const poly of gj.coordinates || []){
+      const ring = poly?.[0];
+      if(!ring) continue;
+      if(!bestRing || ring.length > bestRing.length) bestRing = ring;
+    }
+    return bestRing ? bestRing.map(([lon,lat])=>L.latLng(lat,lon)) : null;
+  }
+  return null;
+}
+async function fetchJson(url){
+  // IMPORTANT: Nominatim usage policy wants a valid User-Agent. Browsers won’t let us set User-Agent,
+  // but we can set a Referer and Accept. Keep requests low (we do 3-5).
+  const res = await fetch(url, { headers:{ 'Accept':'application/json' }, cache:'no-store' });
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}
+
+/* ---------------- Offline counties listing (optional GeoJSON file) ---------------- */
+let countiesOffline = null;
+let nameKeyGuess = null;
+
+document.getElementById('loadCounties').addEventListener('click', ()=>document.getElementById('countiesFile').click());
+document.getElementById('countiesFile').addEventListener('change', async (e)=>{
+  const f = e.target.files?.[0]; if(!f) return;
+  try{
+    const json = JSON.parse(await f.text());
+    if(json?.type !== 'FeatureCollection' || !Array.isArray(json.features)) throw new Error('Not a FeatureCollection.');
+    countiesOffline = json;
+    nameKeyGuess = guessNameKey(json.features);
+    document.getElementById('countiesHint').innerHTML =
+      `Loaded <b>${json.features.length}</b> features. Name key guess: <b>${nameKeyGuess || 'unknown'}</b>.`;
+    computeCountiesOffline();
+    toast('Offline counties loaded.');
+  }catch(err){ toast('Offline counties load failed: ' + err.message); }
+  finally{ e.target.value=''; }
+});
+function guessNameKey(features){
+  const keys = ['NAME','Name','name','COUNTY','county','COUNTYNAME','county_name','NAMELSAD','namelsad'];
+  for(const k of keys){
+    if(features.slice(0,30).some(f => f?.properties && f.properties[k])) return k;
+  }
+  const p = features?.[0]?.properties || {};
+  for(const k of Object.keys(p)){
+    if(typeof p[k] === 'string' && p[k]) return k;
+  }
+  return null;
+}
+function computeCountiesOffline(){
+  if(!countiesOffline || !issued) return;
+  const poly = issued.coordsLonLat;
+  const hits = [];
+  for(const f of countiesOffline.features){
+    const c = centroidOfGeom(f.geometry);
+    if(!c) continue;
+    if(pointInPoly(c, poly)){
+      const nm = (nameKeyGuess && f.properties?.[nameKeyGuess]) ? String(f.properties[nameKeyGuess]) : '(Unnamed county)';
+      hits.push(nm);
+    }
+  }
+  const uniq = [...new Set(hits)].sort((a,b)=>a.localeCompare(b));
+  renderCountyList(uniq);
+}
+function renderCountyList(names){
+  document.getElementById('countLabel').textContent = `${names.length} listed`;
+  const list = document.getElementById('list');
+  if(!names.length){ list.innerHTML = `<div style="opacity:.8;font-size:12px">None</div>`; return; }
+  list.innerHTML = names.map(n=>`<div class="county"><span>${escapeHtml(n)}</span><span class="badge">IN POLYGON</span></div>`).join('');
+}
+function centroidOfGeom(geom){
+  if(!geom) return null;
+  if(geom.type === 'Polygon') return centroidOfRing(geom.coordinates?.[0]);
+  if(geom.type === 'MultiPolygon'){
+    let best=null, bestA=-Infinity;
+    for(const poly of geom.coordinates || []){
+      const ring = poly?.[0];
+      const c = centroidOfRing(ring);
+      const a = Math.abs(areaOfRing(ring));
+      if(c && a > bestA){ bestA=a; best=c; }
+    }
+    return best;
+  }
+  return null;
+}
+function areaOfRing(ring){
+  if(!ring || ring.length < 3) return 0;
+  let a=0;
+  for(let i=0;i<ring.length-1;i++){
+    const [x1,y1]=ring[i], [x2,y2]=ring[i+1];
+    a += x1*y2 - x2*y1;
+  }
+  return a/2;
+}
+function centroidOfRing(ring){
+  if(!ring || ring.length < 3) return null;
+  let a=0,cx=0,cy=0;
+  for(let i=0;i<ring.length-1;i++){
+    const [x1,y1]=ring[i], [x2,y2]=ring[i+1];
+    const cross = x1*y2 - x2*y1;
+    a += cross;
+    cx += (x1+x2)*cross;
+    cy += (y1+y2)*cross;
+  }
+  a *= 0.5;
+  if(Math.abs(a) < 1e-9){
+    let sx=0, sy=0;
+    for(const [x,y] of ring){ sx+=x; sy+=y; }
+    return [sx/ring.length, sy/ring.length];
+  }
+  return [cx/(6*a), cy/(6*a)];
+}
+function pointInPoly(pt, poly){
+  const x=pt[0], y=pt[1];
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+    const xi=poly[i][0], yi=poly[i][1];
+    const xj=poly[j][0], yj=poly[j][1];
+    const intersect = ((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi+1e-12)+xi);
+    if(intersect) inside=!inside;
+  }
+  return inside;
+}
+
+/* default */
+setFakeRadarMode('off');
+</script>
+</body>
+</html>
