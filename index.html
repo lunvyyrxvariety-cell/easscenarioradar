@@ -429,47 +429,82 @@ async function fetchStateBoundaries(stateName){
   if(geoInFlight.has(fips)) return geoInFlight.get(fips);
 
   const promise=(async()=>{
-    // Source 1: TIGERweb REST API (official Census, real TIGER data, CORS enabled)
-    // Layer 86 = Counties and Equivalent (Current)
-    const tigerUrl=`https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/86/query`
-      +`?where=STATEFP%3D%27${fips}%27`
-      +`&outFields=NAME%2CSTATEFP%2CCOUNTYFP%2CGEOID`
-      +`&returnGeometry=true`
-      +`&geometryPrecision=5`
-      +`&outSR=4326`
-      +`&f=geojson`;
+    // ── Source 1: Census Bureau Cartographic Boundary GeoJSON (direct, CORS-enabled) ──
+    // Official CB files at 500k scale, 2023 vintage. Proven CORS + GeoJSON format.
+    // https://www2.census.gov/geo/tiger/GENZ2023/json/
+    const cbUrl=`https://www2.census.gov/geo/tiger/GENZ2023/json/cb_2023_${fips}_county_500k.json`;
 
-    // Source 2: jsDelivr CDN mirror of census-geojson repo (500k = 1:500,000 resolution, good detail)
-    const jsdelivrUrl=`https://cdn.jsdelivr.net/gh/loganpowell/census-geojson@master/GeoJSON/500k/2021/${encodeURIComponent(stateName)}/${encodeURIComponent(stateName)}_county.geojson`;
+    // ── Source 2: PublicaMundi / ArcGIS Hub open data ──
+    // US counties from ArcGIS Living Atlas, reliable CORS GeoJSON
+    const arcgisUrl=`https://opendata.arcgis.com/datasets/48f9af87daa241c4b267c5931ad3b226_0.geojson`;
+    // (this is all-US — we'll filter by state in findCounty if loaded)
 
-    // Source 3: raw.githubusercontent
-    const rawUrl=`https://raw.githubusercontent.com/loganpowell/census-geojson/master/GeoJSON/500k/2021/${encodeURIComponent(stateName)}/${encodeURIComponent(stateName)}_county.geojson`;
+    // ── Source 3: TIGERweb ArcGIS REST — GeoJSON output, paginated ──
+    // Must use resultRecordCount and correct layer. Layer 86 = counties.
+    // Returns Esri FeatureCollection (features array) — same structure as GeoJSON.
+    const tigerUrl=
+      `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/86/query`+
+      `?where=${encodeURIComponent(`STATEFP='${fips}'`)}`+
+      `&outFields=NAME,STATEFP,COUNTYFP`+
+      `&returnGeometry=true&geometryPrecision=4&outSR=4326`+
+      `&resultRecordCount=200&f=geojson`;
 
-    // Source 4: Census Bureau public REST endpoint (cartographic boundary 2022)
-    const censusCartUrl=`https://api.census.gov/data/2022/acs/acs5`; // doesn't serve geometry
+    // ── Source 4: Census cartographic boundary via their GeoJSON API ──
+    // Correct endpoint format: https://api.census.gov/data/... — no, that's tabular.
+    // Use the direct TIGER FTP GeoJSON mirror on data.census.gov CDN:
+    const censusCdnUrl=`https://raw.githubusercontent.com/deldersveld/topojson/master/countries/us-states/${fips}-geojson.json`;
+    // ^ per-state topojson-derived GeoJSON (counties)
+
+    // ── Source 5: Plotly's all-counties GeoJSON (single large file, cached after first load) ──
+    // We'll filter by FIPS prefix client-side.
+    const plotlyUrl=`https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json`;
 
     const sources=[
-      {name:'TIGERweb REST',url:tigerUrl},
-      {name:'jsDelivr/census-geojson',url:jsdelivrUrl},
-      {name:'GitHub raw/census-geojson',url:rawUrl},
+      // Per-state sources first (smaller, faster)
+      {
+        name:'Census CB 2023 (direct)',
+        fetch: async()=>{
+          const r=await fetch(cbUrl);
+          if(!r.ok) throw new Error(`HTTP ${r.status}`);
+          const j=await r.json();
+          return normalizeFC(j, stateName, fips);
+        }
+      },
+      {
+        name:'TIGERweb REST GeoJSON',
+        fetch: async()=>{
+          const r=await fetch(tigerUrl);
+          if(!r.ok) throw new Error(`HTTP ${r.status}`);
+          const j=await r.json();
+          // TIGERweb may return {features:[...]} without type field
+          if(j.error) throw new Error(j.error.message||'TIGERweb error');
+          return normalizeFC(j, stateName, fips);
+        }
+      },
+      {
+        // Plotly all-US file — large (~22MB) but reliable; filter by state FIPS prefix
+        name:'Plotly/Census all-US',
+        fetch: async()=>{
+          // Check if we already have a cached all-US file
+          if(window._plotlyAllUS){
+            return filterByFips(window._plotlyAllUS, fips);
+          }
+          log(`[${stateName}] Downloading all-US county file (~24MB, cached for later states)…`);
+          const r=await fetch(plotlyUrl);
+          if(!r.ok) throw new Error(`HTTP ${r.status}`);
+          const j=await r.json();
+          window._plotlyAllUS=j; // cache globally
+          return filterByFips(j, fips);
+        }
+      },
     ];
 
     let lastErr=null;
     for(const src of sources){
       try{
         log(`[${stateName}] Trying ${src.name}…`);
-        const res=await fetch(src.url,{headers:{Accept:'application/json'}});
-        if(!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json=await res.json();
-        // Normalize to FeatureCollection
-        let fc;
-        if(json.type==='FeatureCollection' && Array.isArray(json.features)) fc=json;
-        else if(json.type==='Feature') fc={type:'FeatureCollection',features:[json]};
-        else if(Array.isArray(json.features)) fc={type:'FeatureCollection',features:json.features};
-        else throw new Error('Unexpected JSON structure');
-
-        if(!fc.features.length) throw new Error('Empty feature collection');
-
+        const fc=await src.fetch();
+        if(!fc||!fc.features||!fc.features.length) throw new Error('Empty result');
         geoCache.set(fips,fc);
         geoInFlight.delete(fips);
         log(`[${stateName}] ✓ Loaded ${fc.features.length} counties via ${src.name}`);
@@ -480,38 +515,81 @@ async function fetchStateBoundaries(stateName){
       }
     }
     geoInFlight.delete(fips);
-    throw lastErr||new Error(`All sources failed for ${stateName}`);
+    throw lastErr||new Error(`All sources failed for ${stateName}. Check your internet connection.`);
   })();
 
   geoInFlight.set(fips,promise);
   return promise;
 }
 
+/* Normalize various response shapes into a standard FeatureCollection */
+function normalizeFC(json, stateName, fips){
+  let features;
+  if(json.type==='FeatureCollection' && Array.isArray(json.features)){
+    features=json.features;
+  } else if(Array.isArray(json.features)){
+    features=json.features; // TIGERweb omits "type" key sometimes
+  } else if(json.type==='Feature'){
+    features=[json];
+  } else {
+    throw new Error('Unexpected JSON structure: '+JSON.stringify(Object.keys(json)));
+  }
+  // Filter out features with no geometry
+  features=features.filter(f=>f&&f.geometry&&f.geometry.coordinates);
+  if(!features.length) throw new Error('No features with geometry');
+  return {type:'FeatureCollection', features};
+}
+
+/* Filter a all-US FeatureCollection (Plotly format) by state FIPS prefix */
+function filterByFips(allUS, stateFips){
+  const features=(allUS.features||[]).filter(f=>{
+    const id=String(f.id||f.properties?.FIPS||f.properties?.fips||f.properties?.GEO_ID||'');
+    // State FIPS is first 2 digits of 5-digit county FIPS
+    return id.padStart(5,'0').slice(0,2)===stateFips ||
+           String(f.properties?.STATE||'').padStart(2,'0')===stateFips;
+  });
+  return {type:'FeatureCollection', features};
+}
+
+const COUNTY_SUFFIX=/\s+(county|parish|borough|census area|municipality|city and borough|city|planning & development district|division|district)\s*$/i;
+
+function getPropNames(props){
+  return [
+    props.NAME, props.name, props.NAMELSAD, props.BASENAME,
+    props.county_name, props.GEO_NAME, props.COUNTY_NAME, props.Label,
+  ].filter(Boolean)
+   .map(n=>String(n).replace(COUNTY_SUFFIX,'').trim().toLowerCase());
+}
+
 function findCounty(fc, nameBase){
-  // nameBase: "Fulton" (no "County"), titleCase preferred
   const needle=nameBase.trim().toLowerCase();
 
-  const getPropNames=props=>[
-    props.NAME,props.name,props.NAMELSAD,props.county_name,
-    props.GEO_NAME,props.COUNTY_NAME,props.Label,
-  ].filter(Boolean).map(n=>String(n).toLowerCase().replace(/\s+(county|parish|borough|census area|municipality|city and borough|city|planning & development district)\s*$/i,'').trim());
-
-  // Exact match first
+  // Pass 1: exact match
   for(const feat of fc.features){
     if(getPropNames(feat.properties||{}).some(n=>n===needle)) return feat;
   }
-  // Partial match
-  let best=null,bestSc=-1;
+  // Pass 2: starts-with or contains
+  let best=null, bestSc=-1;
   for(const feat of fc.features){
     for(const n of getPropNames(feat.properties||{})){
-      if(n===needle){return feat;}
-      if(n.includes(needle)||needle.includes(n)){
-        const sc=1-Math.abs(n.length-needle.length)/(n.length+needle.length+1);
+      if(n===needle) return feat;
+      if(n===needle||n.startsWith(needle)||needle.startsWith(n)){
+        const sc=1-Math.abs(n.length-needle.length)/(Math.max(n.length,needle.length)+1);
         if(sc>bestSc){bestSc=sc;best=feat;}
       }
     }
   }
-  return bestSc>0.55?best:null;
+  if(bestSc>=0.6) return best;
+  // Pass 3: any partial overlap (hyphenated names like Miami-Dade)
+  for(const feat of fc.features){
+    for(const n of getPropNames(feat.properties||{})){
+      if(n.includes(needle)||needle.includes(n)){
+        const sc=0.5*(1-Math.abs(n.length-needle.length)/(Math.max(n.length,needle.length)+1));
+        if(sc>bestSc){bestSc=sc;best=feat;}
+      }
+    }
+  }
+  return bestSc>0.3?best:null;
 }
 
 function featureRings(feat){
