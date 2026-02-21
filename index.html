@@ -1,166 +1,750 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>EAS Scenario Map</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>EAS Scenario Map (PDS + Multi-County + Fake Radar)</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-html,body{margin:0;height:100%;background:#0b1020;font-family:system-ui}
-#map{height:100%}
-.controls{
-position:absolute;z-index:1000;
-top:10px;left:10px;
-background:#111827;color:white;
-padding:12px;border-radius:14px;
-width:340px;
-box-shadow:0 10px 30px rgba(0,0,0,.5)
-}
-select,input,button{
-width:100%;margin-top:6px;
-padding:8px;border-radius:8px;
-border:none;font-weight:600
-}
-button{cursor:pointer}
+  :root{
+    --bg:#0b1020;
+    --panel:rgba(17,24,39,.92);
+    --text:#fff;
+    --muted:rgba(255,255,255,.75);
+    --border:rgba(255,255,255,.12);
+    --field:rgba(255,255,255,.08);
+    --shadow:0 10px 30px rgba(0,0,0,.55);
+    --radius:14px;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  }
+  html,body{height:100%;margin:0;background:var(--bg)}
+  #map{height:100%}
+
+  .panel{
+    position:absolute;z-index:1200;top:10px;left:10px;
+    width:min(520px,94vw);
+    background:var(--panel);
+    color:var(--text);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    backdrop-filter: blur(10px);
+    padding:12px;
+  }
+  .title{font-weight:900;font-size:14px;margin-bottom:6px}
+  .grid{display:grid;gap:10px}
+  label{font-size:12px;color:var(--muted)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  select,input,button,textarea{
+    border-radius:10px;
+    border:1px solid var(--border);
+    background:var(--field);
+    color:var(--text);
+    font-weight:800;
+    outline:none;
+  }
+  select,input,button{height:40px;padding:0 10px}
+  textarea{padding:10px;min-height:84px;resize:vertical;font-weight:800}
+  input::placeholder,textarea::placeholder{color:rgba(255,255,255,.55);font-weight:700}
+  button{cursor:pointer;white-space:nowrap}
+  .primary{background:#2563eb;border-color:rgba(37,99,235,.6)}
+  .ok{background:#10b981;border-color:rgba(16,185,129,.6);color:#06281d}
+  .danger{background:#ef4444;border-color:rgba(239,68,68,.6)}
+  .toggle{
+    display:flex;gap:8px;align-items:center;
+    height:40px;padding:0 10px;
+    border-radius:10px;border:1px solid var(--border);
+    background:var(--field);user-select:none;
+  }
+  .toggle input{width:18px;height:18px}
+  .hint{font-size:12px;color:var(--muted);line-height:1.25}
+  .log{
+    font:12px ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    white-space:pre-wrap;max-height:180px;overflow:auto;
+    background:rgba(0,0,0,.25);
+    border:1px solid rgba(255,255,255,.10);
+    border-radius:10px;padding:8px;
+  }
+  .list{
+    display:flex;flex-direction:column;gap:8px;
+    border:1px solid rgba(255,255,255,.10);
+    border-radius:12px;padding:10px;background:rgba(0,0,0,.12);
+    max-height:190px;overflow:auto;
+  }
+  .chip{
+    display:flex;gap:10px;align-items:center;justify-content:space-between;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.06);
+  }
+  .chip b{font-size:12px}
+  .chip small{font-size:11px;color:var(--muted)}
+  .chip button{height:30px;border-radius:9px;padding:0 10px}
+
+  @media (max-width: 520px){
+    .panel{left:8px;right:8px;width:auto}
+  }
 </style>
 </head>
 <body>
 
 <div id="map"></div>
 
-<div class="controls">
-<b>EAS Scenario Controls</b>
+<div class="panel">
+  <div class="title">EAS Scenario Controls</div>
 
-<select id="basemap">
-<option value="osm">Light OSM</option>
-<option value="dark">Dark</option>
-<option value="sat">Satellite</option>
-</select>
+  <div class="grid">
+    <div class="row">
+      <div style="flex:1;min-width:160px">
+        <label>Basemap</label>
+        <select id="basemap" style="width:100%">
+          <option value="osm">Light OSM</option>
+          <option value="light">Light (CARTO)</option>
+          <option value="dark">Dark (CARTO)</option>
+          <option value="sat">Satellite (Esri)</option>
+        </select>
+      </div>
 
-<select id="radarMode">
-<option value="off">Radar Off</option>
-<option value="on">Radar On</option>
-<option value="animate">Radar Animate</option>
-</select>
+      <div style="flex:1;min-width:160px">
+        <label>Fake radar</label>
+        <select id="radarMode" style="width:100%">
+          <option value="off">Off</option>
+          <option value="on">On</option>
+          <option value="animate">Animate</option>
+        </select>
+      </div>
 
-<select id="alertType">
-<option value="TOR_WARN">Tornado Warning</option>
-<option value="TOR_WATCH">Tornado Watch</option>
-<option value="SVR_WARN">Severe Thunderstorm Warning</option>
-<option value="SVR_WATCH">Severe Thunderstorm Watch</option>
-<option value="WWA">Winter Weather Advisory</option>
-<option value="WS_WATCH">Winter Storm Watch</option>
-<option value="WS_WARN">Winter Storm Warning</option>
-<option value="BLIZZ">Blizzard Warning</option>
-<option value="FFW">Flash Flood Warning</option>
-<option value="SMW">Special Marine Warning</option>
-</select>
+      <div class="toggle" title="PDS uses your special colors / flashing rules" style="margin-top:18px">
+        <input id="pds" type="checkbox"/>
+        <label for="pds" style="margin:0">PDS</label>
+      </div>
+    </div>
 
-<input id="countyQuery" placeholder="North Fulton, GA"/>
-<button onclick="loadCounty()">Search County Polygon</button>
-<button onclick="issueAlert()">Issue Alert</button>
-<button onclick="clearAlert()">Clear</button>
+    <div class="row">
+      <div style="flex:1;min-width:220px">
+        <label>Alert type</label>
+        <select id="alertType" style="width:100%">
+          <option value="TOR_WARN">Tornado Warning</option>
+          <option value="TOR_WATCH">Tornado Watch</option>
+          <option value="SVR_WARN">Severe Thunderstorm Warning</option>
+          <option value="SVR_WATCH">Severe Thunderstorm Watch</option>
+          <option value="WWA">Winter Weather Advisory</option>
+          <option value="WS_WATCH">Winter Storm Watch</option>
+          <option value="WS_WARN">Winter Storm Warning</option>
+          <option value="BLIZZ">Blizzard Warning</option>
+          <option value="FFW">Flash Flood Warning</option>
+          <option value="SMW">Special Marine Warning</option>
+        </select>
+      </div>
+
+      <div style="flex:1;min-width:220px">
+        <label>Headline (optional)</label>
+        <input id="headline" placeholder="e.g., OBSERVED TORNADO" style="width:100%"/>
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1;min-width:200px">
+        <label>Default state (optional)</label>
+        <input id="defaultState" placeholder="GA or Georgia" style="width:100%"/>
+      </div>
+
+      <div class="row" style="flex:1;min-width:220px;justify-content:flex-end">
+        <button class="primary" id="issue">Issue Alert</button>
+        <button class="danger" id="clear">Clear</button>
+      </div>
+    </div>
+
+    <div>
+      <label>Multi-county input (one per line; any casing; “north/northern/etc” ignored)</label>
+      <textarea id="countyBox" placeholder="Examples:
+north fulton, ga
+Cobb County, GA
+southern miami-dade florida"></textarea>
+
+      <div class="row" style="margin-top:8px">
+        <button class="ok" id="addCounties">Add / Update Counties</button>
+        <button id="fit">Fit To Selection</button>
+        <button id="removeAll">Remove All Counties</button>
+      </div>
+      <div class="hint" style="margin-top:6px">
+        Works like: <b>north fulton, ga</b> → Fulton County, Georgia. Also accepts <b>Fulton County Georgia</b> (no comma).
+      </div>
+    </div>
+
+    <div>
+      <label>Selected counties</label>
+      <div class="list" id="countyList">
+        <div style="font-size:12px;color:var(--muted)">None yet.</div>
+      </div>
+    </div>
+
+    <div>
+      <label>Debug log</label>
+      <div class="log" id="log">Ready.</div>
+    </div>
+  </div>
 </div>
 
 <script>
-const map = L.map('map').setView([39.5,-98.35],4);
+/* ---------------- Map + basemaps ---------------- */
+const map = L.map('map', { zoomControl:true }).setView([39.5, -98.35], 4);
 
 const baseLayers = {
-osm:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'),
-dark:L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'),
-sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}')
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap'}),
+  light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {maxZoom:20, attribution:'&copy; OSM &copy; CARTO'}),
+  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:20, attribution:'&copy; OSM &copy; CARTO'}),
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Tiles &copy; Esri'})
 };
 baseLayers.osm.addTo(map);
 
-document.getElementById("basemap").onchange=e=>{
-Object.values(baseLayers).forEach(l=>map.removeLayer(l));
-baseLayers[e.target.value].addTo(map);
-};
+document.getElementById('basemap').addEventListener('change', (e)=>{
+  Object.values(baseLayers).forEach(l => map.removeLayer(l));
+  baseLayers[e.target.value].addTo(map);
+});
 
-let fakeRadar;
-function drawFakeRadar(){
-if(fakeRadar) map.removeLayer(fakeRadar);
-fakeRadar=L.gridLayer({opacity:.5});
-fakeRadar.createTile=(coords)=>{
-const c=document.createElement("canvas");
-c.width=256;c.height=256;
-const ctx=c.getContext("2d");
-for(let i=0;i<400;i++){
-ctx.fillStyle=`rgba(${Math.random()*255},0,0,.3)`;
-ctx.fillRect(Math.random()*256,Math.random()*256,4,4);
-}
-return c;
-};
-fakeRadar.addTo(map);
-}
-document.getElementById("radarMode").onchange=e=>{
-if(e.target.value==="off"){if(fakeRadar)map.removeLayer(fakeRadar);}
-else drawFakeRadar();
-};
-
-const ALERT_COLORS={
-TOR_WARN:"#ff0000",
-TOR_WATCH:"#ffff00",
-SVR_WARN:"#ff7a00",
-SVR_WATCH:"#ffb36b",
-WWA:"#9bdcff",
-WS_WATCH:"#00ffff",
-WS_WARN:"#ffffff",
-BLIZZ:"#0066ff",
-FFW:"#1e4aa8",
-SMW:"#001a66"
-};
-
-let alertLayer;
-
-function issueAlert(){
-if(!currentPolygon)return;
-if(alertLayer)map.removeLayer(alertLayer);
-alertLayer=L.polygon(currentPolygon,{
-color:ALERT_COLORS[document.getElementById("alertType").value],
-fillOpacity:.4,
-weight:4
-}).addTo(map);
+/* ---------------- Debug log ---------------- */
+const logEl = document.getElementById('log');
+function log(msg){
+  const t = new Date().toLocaleTimeString();
+  logEl.textContent = `[${t}] ${msg}\n` + logEl.textContent;
 }
 
-function clearAlert(){
-if(alertLayer)map.removeLayer(alertLayer);
+/* ---------------- Fake radar (offline generated) ---------------- */
+let fakeRadar = null;
+let radarTimer = null;
+let radarSeed = 0;
+
+function stopRadar(){
+  if(radarTimer){ clearInterval(radarTimer); radarTimer = null; }
+}
+function drawRadar(seed=0){
+  if(fakeRadar) map.removeLayer(fakeRadar);
+
+  fakeRadar = L.gridLayer({ opacity:0.60, zIndex:320 });
+  fakeRadar.createTile = (coords) => {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    const ctx = c.getContext('2d');
+
+    // deterministic-ish RNG per tile+seed
+    let s = (coords.x*374761393 + coords.y*668265263 + coords.z*1442695041 + seed*31) >>> 0;
+    function rnd(){ s ^= s<<13; s ^= s>>>17; s ^= s<<5; return (s>>>0)/4294967295; }
+
+    // draw speckled "returns"
+    for(let i=0;i<650;i++){
+      const v = rnd();
+      if(v < 0.58) continue;
+
+      let r,g,b,a;
+      if(v < 0.72){ r=40;  g=200; b=60;  a=0.28; }       // green
+      else if(v < 0.84){ r=240; g=220; b=40;  a=0.32; }  // yellow
+      else if(v < 0.93){ r=245; g=140; b=30;  a=0.36; }  // orange
+      else if(v < 0.98){ r=240; g=60;  b=60;  a=0.40; }  // red
+      else { r=200; g=80; b=255; a=0.44; }               // purple
+
+      ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
+      ctx.fillRect(rnd()*256, rnd()*256, 3 + rnd()*6, 3 + rnd()*6);
+    }
+
+    // scanlines
+    ctx.globalAlpha = 0.10;
+    ctx.fillStyle = '#ffffff';
+    for(let y=0;y<256;y+=9) ctx.fillRect(0, y + ((seed*2)%9), 256, 1);
+    ctx.globalAlpha = 1;
+
+    return c;
+  };
+
+  fakeRadar.addTo(map);
 }
 
-let currentPolygon;
+document.getElementById('radarMode').addEventListener('change', (e)=>{
+  stopRadar();
+  const mode = e.target.value;
+  if(mode === 'off'){
+    if(fakeRadar){ map.removeLayer(fakeRadar); fakeRadar = null; }
+    return;
+  }
+  if(mode === 'on'){
+    radarSeed = Math.floor(Date.now()/1000);
+    drawRadar(radarSeed);
+    return;
+  }
+  // animate
+  radarSeed = 0;
+  drawRadar(radarSeed);
+  radarTimer = setInterval(()=>{ radarSeed++; if(fakeRadar) fakeRadar.redraw(); }, 220);
+});
 
-async function loadCounty(){
-let input=document.getElementById("countyQuery").value.trim();
-let parts=input.split(",");
-if(parts.length<2){alert("Use format: County, State");return;}
-let county=parts[0].replace(/north|south|east|west/ig,"").trim();
-let state=parts[1].trim();
+/* ---------------- Alert styling (normal + PDS) ---------------- */
+/*
+Normal:
+- Tornado warnings red
+- Tornado watches yellow
+- SVR warnings orange
+- SVR watches light orange
+- Winter Weather Advisory light blue
+- Winter Storm Watch cyan
+- Winter Storm Warning white
+- Blizzard Warning blue
+- Flash Flood Warning medium dark blue
+- Special Marine Warning dark blue
 
-const query=`
+PDS:
+- Tornado warnings (observed/pds/emergencies) purple
+- PDS SVR warnings flash orange+purple
+- Tornado watches (PDS) flash yellow+purple
+- PDS SVR watches flash light orange+purple
+*/
+const ALERTS = {
+  TOR_WARN: { normal:{a:'#ff0000'}, pds:{a:'#7e22ce'} },
+  TOR_WATCH:{ normal:{a:'#ffff00'}, pds:{a:'#ffff00', b:'#7e22ce', flash:true} },
+  SVR_WARN: { normal:{a:'#ff7a00'}, pds:{a:'#ff7a00', b:'#7e22ce', flash:true} },
+  SVR_WATCH:{ normal:{a:'#ffb36b'}, pds:{a:'#ffb36b', b:'#7e22ce', flash:true} },
+  WWA:      { normal:{a:'#9bdcff'} },
+  WS_WATCH: { normal:{a:'#00ffff'} },
+  WS_WARN:  { normal:{a:'#ffffff'} },
+  BLIZZ:    { normal:{a:'#0066ff'} },
+  FFW:      { normal:{a:'#1e4aa8'} },
+  SMW:      { normal:{a:'#001a66'} }
+};
+
+function paintFor(type, isPds){
+  const def = ALERTS[type] || {normal:{a:'#ff00ff'}};
+  return (isPds && def.pds) ? def.pds : def.normal;
+}
+
+/* ---------------- County parsing that fixes "northern fulton" ---------------- */
+const STATE_ABBR = {
+  AL:'Alabama', AK:'Alaska', AZ:'Arizona', AR:'Arkansas', CA:'California', CO:'Colorado', CT:'Connecticut', DE:'Delaware',
+  FL:'Florida', GA:'Georgia', HI:'Hawaii', ID:'Idaho', IL:'Illinois', IN:'Indiana', IA:'Iowa', KS:'Kansas', KY:'Kentucky',
+  LA:'Louisiana', ME:'Maine', MD:'Maryland', MA:'Massachusetts', MI:'Michigan', MN:'Minnesota', MS:'Mississippi', MO:'Missouri',
+  MT:'Montana', NE:'Nebraska', NV:'Nevada', NH:'New Hampshire', NJ:'New Jersey', NM:'New Mexico', NY:'New York', NC:'North Carolina',
+  ND:'North Dakota', OH:'Ohio', OK:'Oklahoma', OR:'Oregon', PA:'Pennsylvania', RI:'Rhode Island', SC:'South Carolina',
+  SD:'South Dakota', TN:'Tennessee', TX:'Texas', UT:'Utah', VT:'Vermont', VA:'Virginia', WA:'Washington', WV:'West Virginia',
+  WI:'Wisconsin', WY:'Wyoming', DC:'District Of Columbia'
+};
+
+function titleCase(s){
+  return String(s||'').toLowerCase().replace(/\b([a-z])/g, m => m.toUpperCase());
+}
+
+function normalizeState(s){
+  let t = String(s||'').trim().replace(/\./g,'');
+  if(!t) return '';
+  const up = t.toUpperCase();
+  if(STATE_ABBR[up]) return STATE_ABBR[up];
+
+  const tc = titleCase(t);
+  for(const v of Object.values(STATE_ABBR)){
+    if(v.toLowerCase() === tc.toLowerCase()) return v;
+  }
+  return titleCase(t);
+}
+
+function stripAreaWords(s){
+  s = String(s || '').trim();
+
+  // Normalize punctuation to spaces
+  s = s.replace(/[._-]+/g, ' ').replace(/\s+/g,' ').trim();
+
+  // Remove leading “area” descriptors (north, northern, N., NE, etc.)
+  // Repeat to handle stacked descriptors: "far north", "upper northeast", etc.
+  const lead = /^(?:the\s+)?(?:far\s+|upper\s+|lower\s+|central\s+|mid\s+|outer\s+|inner\s+)?(?:north(?:ern)?|south(?:ern)?|east(?:ern)?|west(?:ern)?|n\.?|s\.?|e\.?|w\.?|ne|nw|se|sw|northeast|northwest|southeast|southwest)\s+/i;
+  while(lead.test(s)) s = s.replace(lead, '').trim();
+
+  // Optional trailing area words
+  s = s.replace(/\b(area|region|portion|half|side|section)\b/ig,' ').replace(/\s+/g,' ').trim();
+
+  return s;
+}
+
+function normalizeCountyState(input, fallbackState){
+  let s = String(input||'').trim().replace(/\s+/g,' ');
+  if(!s) return { county:'', state:'' };
+
+  let countyPart='', statePart='';
+
+  if(s.includes(',')){
+    const i = s.indexOf(',');
+    countyPart = s.slice(0,i).trim();
+    statePart = s.slice(i+1).trim();
+  }else{
+    // Try to infer state at end (abbr or full) if no comma
+    const toks = s.split(' ');
+    if(toks.length >= 2){
+      const last1 = toks.slice(-1).join(' ');
+      const last2 = toks.slice(-2).join(' ');
+      const last3 = toks.slice(-3).join(' ');
+      const st1 = normalizeState(last1);
+      const st2 = normalizeState(last2);
+      const st3 = normalizeState(last3);
+
+      const isState = (x) => Object.values(STATE_ABBR).some(v => v.toLowerCase() === String(x||'').toLowerCase());
+
+      if(isState(st3)){ statePart = last3; countyPart = toks.slice(0,-3).join(' '); }
+      else if(isState(st2)){ statePart = last2; countyPart = toks.slice(0,-2).join(' '); }
+      else if(isState(st1)){ statePart = last1; countyPart = toks.slice(0,-1).join(' '); }
+      else{
+        // no obvious state
+        countyPart = s;
+        statePart = fallbackState || '';
+      }
+    }else{
+      countyPart = s;
+      statePart = fallbackState || '';
+    }
+  }
+
+  let county = stripAreaWords(countyPart);
+  county = county.replace(/\s+county$/i,'').trim(); // remove any existing "county"
+  county = titleCase(county) + ' County';
+
+  let state = normalizeState(statePart || fallbackState || '');
+  return { county, state };
+}
+
+/* ---------------- Overpass county boundary fetch ---------------- */
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.nchc.org.tw/api/interpreter'
+];
+
+function escapeOverpass(s){ return String(s).replace(/\\/g,'\\\\').replace(/"/g,'\\"'); }
+function escapeOverpassRegex(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+async function overpassQuery(query){
+  let lastErr = null;
+  for(const ep of OVERPASS_ENDPOINTS){
+    try{
+      const res = await fetch(ep, {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',
+          'Accept':'application/json'
+        },
+        body: new URLSearchParams({ data: query }).toString()
+      });
+      if(!res.ok) throw new Error(`HTTP ${res.status} from ${ep}`);
+      return await res.json();
+    }catch(e){
+      lastErr = e;
+      log(`Endpoint failed: ${ep} -> ${e.message}`);
+    }
+  }
+  throw lastErr || new Error('All Overpass endpoints failed.');
+}
+
+// Stitch outer ways into rings (robust for most counties)
+function relationGeometryToRings(rel){
+  const members = rel.members || [];
+  const outers = members.filter(m => (m.role || '').toLowerCase() === 'outer' && Array.isArray(m.geometry));
+  if(!outers.length) return [];
+  const ways = outers.map(w => w.geometry.map(p => L.latLng(p.lat, p.lon)));
+
+  const unused = ways.slice();
+  const rings = [];
+  function same(a,b){
+    return a && b && Math.abs(a.lat-b.lat) < 1e-6 && Math.abs(a.lng-b.lng) < 1e-6;
+  }
+
+  while(unused.length){
+    let cur = unused.pop();
+    if(cur.length < 2) continue;
+
+    let changed = true;
+    while(changed){
+      changed = false;
+      for(let i=0;i<unused.length;i++){
+        const w = unused[i];
+        const a0 = cur[0], a1 = cur[cur.length-1];
+        const b0 = w[0],  b1 = w[w.length-1];
+
+        if(same(a1,b0)){
+          cur = cur.concat(w.slice(1));
+          unused.splice(i,1);
+          changed = true; break;
+        }else if(same(a1,b1)){
+          cur = cur.concat(w.slice(0,-1).reverse());
+          unused.splice(i,1);
+          changed = true; break;
+        }else if(same(a0,b1)){
+          cur = w.slice(0,-1).concat(cur);
+          unused.splice(i,1);
+          changed = true; break;
+        }else if(same(a0,b0)){
+          cur = w.slice(1).reverse().concat(cur);
+          unused.splice(i,1);
+          changed = true; break;
+        }
+      }
+    }
+
+    if(cur.length >= 3 && !same(cur[0], cur[cur.length-1])) cur.push(cur[0]);
+    if(cur.length >= 4) rings.push(cur);
+  }
+  return rings;
+}
+
+async function fetchCountyPolygon(countyNameWithCounty, stateFullName){
+  // countyNameWithCounty: "Fulton County"
+  const baseCounty = String(countyNameWithCounty).replace(/\s+County$/i,'').trim();
+  const stateName = String(stateFullName).trim();
+
+  // Primary: find state area admin_level=4, then county relations admin_level=6 within that area
+  const q1 = `
 [out:json][timeout:25];
-area["boundary"="administrative"]["admin_level"="4"]["name"="${state}"]->.a;
-relation["boundary"="administrative"]["admin_level"="6"]["name"~"${county}",i](area.a);
-out geom;
+area["boundary"="administrative"]["admin_level"="4"]["name"="${escapeOverpass(stateName)}"]->.a;
+(
+  relation["boundary"="administrative"]["admin_level"="6"]["name"~"^${escapeOverpassRegex(baseCounty)}( County)?$",i](area.a);
+  relation["boundary"="administrative"]["admin_level"="6"]["name"~"${escapeOverpassRegex(baseCounty)}",i](area.a);
+);
+out tags geom;
 `;
 
-const res=await fetch("https://overpass-api.de/api/interpreter",{
-method:"POST",
-body:new URLSearchParams({data:query})
-});
-const data=await res.json();
-if(!data.elements.length){alert("County not found");return;}
+  const data1 = await overpassQuery(q1);
+  let elems = (data1 && data1.elements) ? data1.elements : [];
 
-let coords=data.elements[0].members
-.filter(m=>m.role==="outer"&&m.geometry)
-.flatMap(m=>m.geometry.map(p=>[p.lat,p.lon]));
+  let candidates = [];
+  for(const el of elems){
+    if(el.type !== 'relation') continue;
+    const rings = relationGeometryToRings(el);
+    for(const ring of rings){
+      if(ring.length >= 4) candidates.push({ name: el.tags?.name || 'Unnamed', ring });
+    }
+  }
 
-currentPolygon=coords.map(p=>L.latLng(p[0],p[1]));
-map.fitBounds(L.polygon(currentPolygon).getBounds());
+  if(!candidates.length){
+    // Fallback: broaden, some places tagged differently
+    const q2 = `
+[out:json][timeout:25];
+area["boundary"="administrative"]["admin_level"="4"]["name"="${escapeOverpass(stateName)}"]->.a;
+relation["boundary"="administrative"]["name"~"^${escapeOverpassRegex(baseCounty)}( County)?$",i](area.a);
+out tags geom;
+`;
+    const data2 = await overpassQuery(q2);
+    elems = (data2 && data2.elements) ? data2.elements : [];
+    for(const el of elems){
+      if(el.type !== 'relation') continue;
+      const rings = relationGeometryToRings(el);
+      for(const ring of rings){
+        if(ring.length >= 4) candidates.push({ name: el.tags?.name || 'Unnamed', ring });
+      }
+    }
+  }
+
+  if(!candidates.length) return null;
+
+  // Pick the largest ring (most likely the county boundary)
+  candidates.sort((a,b)=>b.ring.length - a.ring.length);
+  return { name: candidates[0].name, ring: candidates[0].ring };
 }
-</script>
 
+/* ---------------- Multi-county selection + UI ---------------- */
+const countyListEl = document.getElementById('countyList');
+
+// key -> {displayName, county, state, ring, layer}
+const selected = new Map();
+
+let selectionLayers = L.featureGroup().addTo(map);
+
+function keyOf(county, state){
+  return `${String(county).toLowerCase()}|${String(state).toLowerCase()}`;
+}
+
+function renderSelectedList(){
+  countyListEl.innerHTML = '';
+  if(selected.size === 0){
+    countyListEl.innerHTML = `<div style="font-size:12px;color:var(--muted)">None yet.</div>`;
+    return;
+  }
+
+  for(const [k, item] of selected.entries()){
+    const div = document.createElement('div');
+    div.className = 'chip';
+    div.innerHTML = `
+      <div style="min-width:0">
+        <b>${escapeHtml(item.displayName)}</b><br/>
+        <small>${escapeHtml(item.county)}, ${escapeHtml(item.state)}</small>
+      </div>
+      <div class="row" style="gap:6px">
+        <button data-act="zoom" data-key="${escapeHtml(k)}">Zoom</button>
+        <button class="danger" data-act="remove" data-key="${escapeHtml(k)}">Remove</button>
+      </div>
+    `;
+    countyListEl.appendChild(div);
+  }
+
+  countyListEl.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const act = btn.getAttribute('data-act');
+      const k = btn.getAttribute('data-key');
+      const item = selected.get(k);
+      if(!item) return;
+
+      if(act === 'remove'){
+        if(item.layer) selectionLayers.removeLayer(item.layer);
+        selected.delete(k);
+        renderSelectedList();
+        log(`Removed: ${item.displayName}`);
+      }else if(act === 'zoom'){
+        map.fitBounds(L.polygon(item.ring).getBounds(), {padding:[20,20]});
+      }
+    });
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function updateSelectionLayer(item){
+  if(item.layer) selectionLayers.removeLayer(item.layer);
+  item.layer = L.polygon(item.ring, { color:'#111827', weight:2, fillColor:'#111827', fillOpacity:0.10 });
+  selectionLayers.addLayer(item.layer);
+}
+
+/* ---------------- PDS + multi-county alert issuing ---------------- */
+let issued = null; // {group, timer}
+function clearIssued(){
+  if(issued?.timer) clearInterval(issued.timer);
+  if(issued?.group) map.removeLayer(issued.group);
+  issued = null;
+}
+
+function issueAlert(){
+  if(selected.size === 0){
+    alert('Add at least one county first.');
+    return;
+  }
+
+  clearIssued();
+
+  const type = document.getElementById('alertType').value;
+  const isPds = document.getElementById('pds').checked;
+  const headline = (document.getElementById('headline').value || '').trim();
+  const paint = paintFor(type, isPds);
+
+  // Build alert polygons for all selected counties
+  const group = L.featureGroup();
+  for(const item of selected.values()){
+    const poly = L.polygon(item.ring, {
+      color: paint.a,
+      fillColor: paint.a,
+      fillOpacity: 0.35,
+      weight: 4
+    });
+    group.addLayer(poly);
+  }
+  group.addTo(map);
+
+  // Fit bounds of all counties in the alert
+  map.fitBounds(group.getBounds(), {padding:[20,20]});
+
+  // Flashing support (toggle between a/b)
+  let phase = true;
+  function applyColor(col){
+    group.eachLayer(layer => layer.setStyle({ color: col, fillColor: col }));
+  }
+  if(paint.flash){
+    issued = { group, timer: setInterval(()=>{ phase = !phase; applyColor(phase ? paint.a : (paint.b || paint.a)); }, 450) };
+  }else{
+    issued = { group, timer: null };
+  }
+
+  log(`Issued alert: ${type}${isPds ? ' (PDS)' : ''}${headline ? ' • '+headline : ''} • Counties: ${selected.size}`);
+}
+
+function clearAll(){
+  clearIssued();
+  selected.clear();
+  selectionLayers.clearLayers();
+  renderSelectedList();
+  log('Cleared everything.');
+}
+
+/* ---------------- Buttons ---------------- */
+document.getElementById('issue').addEventListener('click', issueAlert);
+document.getElementById('clear').addEventListener('click', clearAll);
+
+document.getElementById('fit').addEventListener('click', ()=>{
+  if(selected.size === 0){ alert('No counties selected.'); return; }
+  const bounds = selectionLayers.getBounds();
+  if(bounds.isValid()) map.fitBounds(bounds, {padding:[20,20]});
+});
+
+document.getElementById('removeAll').addEventListener('click', ()=>{
+  selected.clear();
+  selectionLayers.clearLayers();
+  renderSelectedList();
+  log('Removed all counties.');
+});
+
+/* ---------------- Add / update multi-county lines ---------------- */
+document.getElementById('addCounties').addEventListener('click', async ()=>{
+  const raw = document.getElementById('countyBox').value || '';
+  const defaultState = normalizeState(document.getElementById('defaultState').value || '').trim();
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map(x => x.trim())
+    .filter(Boolean);
+
+  if(lines.length === 0){
+    alert('Type at least one county line.');
+    return;
+  }
+
+  log(`Processing ${lines.length} line(s)…`);
+
+  for(const line of lines){
+    try{
+      const parsed = normalizeCountyState(line, defaultState);
+      if(!parsed.state){
+        log(`Skipped "${line}" (no state detected). Add ", GA" or set Default state.`);
+        continue;
+      }
+
+      const k = keyOf(parsed.county, parsed.state);
+
+      // Already selected? just refetch/update to be safe
+      log(`Lookup: ${parsed.county}, ${parsed.state} (from "${line}")`);
+
+      const found = await fetchCountyPolygon(parsed.county, parsed.state);
+      if(!found){
+        log(`NOT FOUND: ${parsed.county}, ${parsed.state}`);
+        continue;
+      }
+
+      const item = selected.get(k) || {
+        displayName: found.name,
+        county: parsed.county,
+        state: parsed.state,
+        ring: found.ring,
+        layer: null
+      };
+
+      item.displayName = found.name;
+      item.ring = found.ring;
+
+      selected.set(k, item);
+      updateSelectionLayer(item);
+
+      log(`Added/Updated: ${found.name}`);
+    }catch(e){
+      log(`ERROR line "${line}": ${e.message}`);
+    }
+  }
+
+  renderSelectedList();
+});
+
+/* ---------------- Start UI state ---------------- */
+renderSelectedList();
+</script>
 </body>
 </html>
