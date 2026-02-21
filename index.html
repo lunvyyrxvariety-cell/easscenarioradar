@@ -128,6 +128,30 @@
 
     <hr/>
 
+    <!-- ── Shape mode toggle ── -->
+    <div class="row">
+      <div class="col">
+        <div class="lbl">Alert Shape</div>
+        <div class="mode-tabs" id="modeTabs">
+          <button class="mode-tab active" data-mode="county">Counties</button>
+          <button class="mode-tab" data-mode="polygon">Draw Polygon</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Draw polygon controls (hidden by default) -->
+    <div id="drawSection" style="display:none">
+      <div class="draw-toolbar row">
+        <button class="btn-green" id="btnDrawStart">&#9998; Start Drawing</button>
+        <button class="btn-ghost" id="btnDrawUndo" disabled>&#8630; Undo</button>
+        <button class="btn-red"   id="btnDrawClear" disabled>&#10005; Clear</button>
+      </div>
+      <div class="hint" id="drawHint">Click on the map to place polygon points. Double-click to close.</div>
+      <div id="drawVertexCount" style="display:none" class="hint"></div>
+    </div>
+
+    <hr/>
+
     <!-- Issue button -->
     <div class="row">
       <button class="btn-blue" id="btnIssue" style="flex:1">&#9888; Issue Alert</button>
