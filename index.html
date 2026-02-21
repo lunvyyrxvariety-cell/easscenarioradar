@@ -1,139 +1,49 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>EAS Scenario Map — Census TIGER Counties</title>
-
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- test -->
-<style>
-:root{
-  --bg:#0b1020;
-  --panel:rgba(11,16,30,.97);
-  --text:#eef2ff;
-  --muted:rgba(180,200,255,.6);
-  --border:rgba(255,255,255,.09);
-  --field:rgba(255,255,255,.06);
-  --radius:11px;
-  --shadow:0 16px 48px rgba(0,0,0,.7);
-  font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);overflow:hidden}
-#map{position:absolute;inset:0;z-index:0}
-
-.panel{
-  position:absolute;z-index:1200;top:10px;left:10px;
-  width:min(490px,calc(100vw - 20px));
-  background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);
-  box-shadow:var(--shadow);backdrop-filter:blur(18px);
-  color:var(--text);display:flex;flex-direction:column;max-height:calc(100vh - 20px);
-}
-.p-head{
-  padding:9px 13px 7px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
-}
-.p-head h1{font-size:13px;font-weight:900;letter-spacing:.4px;color:#fff}
-.p-head span{font-size:10px;color:var(--muted);font-weight:600}
-.p-body{padding:9px 11px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1}
-.p-body::-webkit-scrollbar{width:4px}
-.p-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.13);border-radius:2px}
-
-.row{display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap}
-.col{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
-label{font-size:10.5px;font-weight:800;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
-select,input,button,textarea{
-  border-radius:7px;border:1px solid var(--border);background:var(--field);
-  color:var(--text);font-size:12px;font-weight:700;outline:none;
-  transition:border-color .15s,background .15s;
-}
-select:focus,input:focus,textarea:focus{border-color:rgba(99,155,255,.45);background:rgba(255,255,255,.09)}
-select,input{height:33px;padding:0 9px;width:100%}
-textarea{width:100%;padding:7px 9px;resize:vertical;line-height:1.4;font-size:12px}
-button{height:33px;padding:0 11px;cursor:pointer;white-space:nowrap}
-button:disabled{opacity:.5;cursor:not-allowed}
-.btn-blue{background:#2563eb;border-color:rgba(37,99,235,.4);color:#fff}
-.btn-blue:hover:not(:disabled){background:#1d4ed8}
-.btn-green{background:#047857;border-color:rgba(4,120,87,.4);color:#d1fae5}
-.btn-green:hover:not(:disabled){background:#065f46}
-.btn-red{background:#b91c1c;border-color:rgba(185,28,28,.4);color:#fff}
-.btn-red:hover:not(:disabled){background:#991b1b}
-.btn-ghost{background:var(--field)}
-.btn-ghost:hover{background:rgba(255,255,255,.11)}
-
-.pds-label{
-  display:flex;align-items:center;gap:6px;height:33px;
-  padding:0 9px;border-radius:7px;border:1px solid var(--border);
-  background:var(--field);cursor:pointer;user-select:none;
-  font-size:12px;font-weight:800;white-space:nowrap;flex-shrink:0;
-}
-.pds-label input{width:14px;height:14px;accent-color:#7c3aed;cursor:pointer;flex-shrink:0}
-.pds-label.active{border-color:rgba(124,58,237,.6);background:rgba(124,58,237,.14)}
-
-#swatch{height:4px;border-radius:2px;transition:background .2s;margin:0;flex-shrink:0}
-
-hr{border:none;border-top:1px solid var(--border)}
-.hint{font-size:10.5px;color:var(--muted);line-height:1.45}
-
-.c-list{display:flex;flex-direction:column;gap:4px;max-height:155px;overflow-y:auto}
-.c-list::-webkit-scrollbar{width:3px}
-.c-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
-.chip{
-  display:flex;align-items:center;justify-content:space-between;gap:8px;
-  background:rgba(255,255,255,.04);border:1px solid var(--border);
-  border-radius:7px;padding:5px 8px;
-}
-.chip .info{display:flex;flex-direction:column;gap:1px;min-width:0}
-.chip .info b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chip .info small{font-size:10px;color:var(--muted)}
-.chip .acts{display:flex;gap:3px;flex-shrink:0}
-.chip .acts button{height:24px;font-size:10.5px;padding:0 7px;border-radius:5px}
-
-.log{
-  font:10.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
-  white-space:pre-wrap;max-height:90px;overflow-y:auto;
-  background:rgba(0,0,0,.28);border:1px solid var(--border);
-  border-radius:7px;padding:6px;color:var(--muted);
-}
-.log::-webkit-scrollbar{width:3px}
-.log::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
-
-@keyframes spin{to{transform:rotate(360deg)}}
-.spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(255,255,255,.25);
-  border-top-color:#fff;border-radius:50%;animation:spin .65s linear infinite;vertical-align:middle;margin-right:4px}
-
-@media(max-width:510px){
-  .panel{left:8px;right:8px;width:auto;top:8px;max-height:calc(100vh - 16px)}
-}
-</style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>EAS Scenario Map — Census TIGER Counties</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+
 <div id="map"></div>
 
 <div class="panel">
+
   <div class="p-head">
-    <h1>⚠ EAS SCENARIO MAP</h1>
-    <span>U.S. Census TIGER · All 50 States</span>
+    <h1>&#9888; EAS SCENARIO MAP</h1>
+    <small>Census TIGER &middot; All 50 States + DC</small>
   </div>
+
+  <!-- Alert color swatch -->
   <div id="swatch"></div>
+
+  <!-- Fetch progress bar -->
+  <div id="prog-wrap"><div id="prog"></div></div>
+
   <div class="p-body">
 
-    <!-- Basemap + Radar -->
+    <!-- ── Row 1: Basemap + Radar ── -->
     <div class="row">
       <div class="col">
-        <label>Basemap</label>
+        <div class="lbl">Basemap</div>
         <select id="basemap">
-          <option value="osm">Light — OpenStreetMap</option>
-          <option value="carto-light">Light — CARTO</option>
-          <option value="carto-dark" selected>Dark — CARTO</option>
-          <option value="esri-sat">Satellite — Esri</option>
-          <option value="bing-sat">Satellite — Bing</option>
+          <option value="osm">&#9728; Light &mdash; OpenStreetMap</option>
+          <option value="carto-light">&#9728; Light &mdash; CARTO</option>
+          <option value="carto-dark" selected>&#127769; Dark &mdash; CARTO</option>
+          <option value="apple-light">&#9728; Light &mdash; Apple</option>
+          <option value="apple-dark">&#127769; Dark &mdash; Apple</option>
+          <option value="esri-sat">&#128752; Satellite &mdash; Esri</option>
+          <option value="bing-sat">&#128752; Satellite &mdash; Bing</option>
+          <option value="gmaps-sat">&#128752; Satellite &mdash; Google</option>
         </select>
       </div>
-      <div class="col">
-        <label>Radar</label>
+      <div class="col" style="max-width:130px">
+        <div class="lbl">Radar</div>
         <select id="radarMode">
           <option value="off">Off</option>
           <option value="static">Static</option>
@@ -142,688 +52,134 @@ hr{border:none;border-top:1px solid var(--border)}
       </div>
     </div>
 
-    <!-- Alert type + PDS -->
+    <hr/>
+
+    <!-- ── Row 2: Alert type + PDS ── -->
     <div class="row">
       <div class="col">
-        <label>Alert Type</label>
+        <div class="lbl">Alert Type</div>
         <select id="alertType">
-          <optgroup label="── TORNADO ──">
+          <optgroup label="&mdash;&mdash; TORNADO &mdash;&mdash;">
             <option value="TOR_WARN">Tornado Warning</option>
             <option value="TOR_WATCH">Tornado Watch</option>
           </optgroup>
-          <optgroup label="── SEVERE THUNDERSTORM ──">
+          <optgroup label="&mdash;&mdash; SEVERE THUNDERSTORM &mdash;&mdash;">
             <option value="SVR_WARN">Severe Thunderstorm Warning</option>
             <option value="SVR_WATCH">Severe Thunderstorm Watch</option>
           </optgroup>
-          <optgroup label="── WINTER ──">
+          <optgroup label="&mdash;&mdash; WINTER &mdash;&mdash;">
             <option value="WWA">Winter Weather Advisory</option>
             <option value="WS_WATCH">Winter Storm Watch</option>
             <option value="WS_WARN">Winter Storm Warning</option>
             <option value="BLIZZ">Blizzard Warning</option>
           </optgroup>
-          <optgroup label="── FLOOD / MARINE ──">
+          <optgroup label="&mdash;&mdash; FLOOD / MARINE &mdash;&mdash;">
             <option value="FFW">Flash Flood Warning</option>
             <option value="SMW">Special Marine Warning</option>
           </optgroup>
         </select>
       </div>
-      <label class="pds-label" id="pdsLabel">
+      <label class="pds-pill" id="pdsPill" title="Particularly Dangerous Situation">
         <input type="checkbox" id="pds"/> PDS
       </label>
     </div>
 
     <!-- Headline -->
     <div class="col">
-      <label>Headline (optional)</label>
-      <input id="headline" placeholder="e.g. TORNADO EMERGENCY FOR METRO AREA" style="width:100%"/>
+      <div class="lbl">Headline (optional)</div>
+      <input id="headline" placeholder="e.g. TORNADO EMERGENCY FOR DOWNTOWN"/>
     </div>
 
     <hr/>
 
-    <!-- County input -->
+    <!-- ── County input ── -->
     <div class="col">
-      <label>Counties — one per line</label>
-      <textarea id="countyBox" rows="4"
-        placeholder="Examples:&#10;Fulton County, GA&#10;north harris, texas&#10;Miami-Dade, FL&#10;Shelby, TN&#10;Cook County Illinois"></textarea>
+      <div class="lbl">Counties &mdash; one per line</div>
+      <textarea id="countyBox" rows="3"
+        placeholder="Fulton County, GA&#10;north harris, TX&#10;Miami-Dade, FL&#10;Cook County Illinois&#10;Shelby, TN">
+      </textarea>
     </div>
 
     <div class="row">
-      <div class="col" style="max-width:155px">
-        <label>Default State</label>
+      <div class="col" style="max-width:150px">
+        <div class="lbl">Default State</div>
         <input id="defState" placeholder="TN or Tennessee"/>
       </div>
-      <button class="btn-green" id="btnAdd" style="margin-top:18px">＋ Add Counties</button>
-      <button class="btn-ghost" id="btnRemAll" style="margin-top:18px">Remove All</button>
+      <button class="btn-green" id="btnAdd" style="margin-top:16px;flex:1">+ Add Counties</button>
+      <button class="btn-ghost" id="btnRemAll" style="margin-top:16px">X All</button>
     </div>
 
     <div class="hint">
-      Accepts: <b>Fulton County, GA</b> · <b>north harris, texas</b> · <b>Cook County Illinois</b> (no comma). Direction words (north/southern/etc.) are stripped automatically. Uses real U.S. Census TIGER boundaries.
+      Supports: <b>County, ST</b> &middot; <b>County, Full State</b> &middot;
+      <b>north/southern County State</b>. Direction words stripped automatically.
+      Also: Parish (LA), Borough (AK).
     </div>
 
-    <hr/>
-
-    <!-- County list -->
+    <!-- Selected counties list -->
     <div class="col">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
-        <label>Selected (<span id="cCount">0</span>)</label>
-        <button class="btn-ghost" id="btnFit" style="height:21px;font-size:10px;padding:0 7px">Fit Map</button>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="lbl">Selected Counties (<span id="cCount">0</span>)</div>
+        <button class="btn-ghost btn-sm" id="btnFit">Fit</button>
       </div>
       <div class="c-list" id="cList">
-        <div style="font-size:11px;color:var(--muted);padding:3px 0">None yet.</div>
+        <div style="font-size:10.5px;color:var(--muted);padding:2px 0">No counties selected.</div>
       </div>
     </div>
 
     <hr/>
 
-    <!-- Issue / Clear -->
+    <!-- ── Shape mode toggle ── -->
     <div class="row">
-      <button class="btn-blue" id="btnIssue" style="flex:1">⚠ Issue Alert</button>
-      <button class="btn-red" id="btnClearAlert">Clear Alert</button>
-      <button class="btn-ghost" id="btnResetAll">Reset All</button>
+      <div class="col">
+        <div class="lbl">Alert Shape</div>
+        <div class="mode-tabs" id="modeTabs">
+          <button class="mode-tab active" data-mode="county">Counties</button>
+          <button class="mode-tab" data-mode="polygon">Draw Polygon</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Draw polygon controls (hidden by default) -->
+    <div id="drawSection" style="display:none">
+      <div class="draw-toolbar row">
+        <button class="btn-green" id="btnDrawStart">&#9998; Start Drawing</button>
+        <button class="btn-ghost" id="btnDrawUndo" disabled>&#8630; Undo</button>
+        <button class="btn-red"   id="btnDrawClear" disabled>&#10005; Clear</button>
+      </div>
+      <div class="hint" id="drawHint">Click on the map to place polygon points. Double-click to close.</div>
+      <div id="drawVertexCount" style="display:none" class="hint"></div>
     </div>
 
     <hr/>
 
-    <!-- Log -->
-    <div class="col">
-      <label>Log</label>
-      <div class="log" id="log">Ready. County data loads from U.S. Census TIGER on first lookup.</div>
+    <!-- Issue button -->
+    <div class="row">
+      <button class="btn-blue" id="btnIssue" style="flex:1">&#9888; Issue Alert</button>
     </div>
 
-  </div>
-</div>
-
-<script>
-/* ══════════════════════════════════════════════════════
-   ALERT DEFINITIONS
-══════════════════════════════════════════════════════ */
-const DEFS = {
-  TOR_WARN:  { label:'Tornado Warning',             color:'#ff0000', pdsColor:'#7e22ce', pdsFlash:null },
-  TOR_WATCH: { label:'Tornado Watch',               color:'#ffd700', pdsColor:null,      pdsFlash:['#ffd700','#7e22ce'] },
-  SVR_WARN:  { label:'Severe Thunderstorm Warning', color:'#ff7a00', pdsColor:null,      pdsFlash:['#ff7a00','#7e22ce'] },
-  SVR_WATCH: { label:'Severe Thunderstorm Watch',   color:'#ffb36b', pdsColor:null,      pdsFlash:['#ffb36b','#7e22ce'] },
-  WWA:       { label:'Winter Weather Advisory',     color:'#9bdcff', pdsColor:null,      pdsFlash:null },
-  WS_WATCH:  { label:'Winter Storm Watch',          color:'#00ffff', pdsColor:null,      pdsFlash:null },
-  WS_WARN:   { label:'Winter Storm Warning',        color:'#ffffff', pdsColor:null,      pdsFlash:null },
-  BLIZZ:     { label:'Blizzard Warning',            color:'#2255ff', pdsColor:null,      pdsFlash:null },
-  FFW:       { label:'Flash Flood Warning',         color:'#1e4ab8', pdsColor:null,      pdsFlash:null },
-  SMW:       { label:'Special Marine Warning',      color:'#001a99', pdsColor:null,      pdsFlash:null },
-};
-
-function alertColors(type, pds){
-  const d = DEFS[type] || DEFS.TOR_WARN;
-  if(pds){
-    if(d.pdsColor) return { color:d.pdsColor, flash:null };
-    if(d.pdsFlash) return { color:d.pdsFlash[0], flash:d.pdsFlash };
-  }
-  return { color:d.color, flash:null };
-}
-
-function refreshSwatch(){
-  const {color} = alertColors(
-    document.getElementById('alertType').value,
-    document.getElementById('pds').checked
-  );
-  document.getElementById('swatch').style.background = color;
-}
-document.getElementById('alertType').addEventListener('change', refreshSwatch);
-document.getElementById('pds').addEventListener('change', ()=>{
-  document.getElementById('pdsLabel').classList.toggle('active', document.getElementById('pds').checked);
-  refreshSwatch();
-});
-refreshSwatch();
-
-/* ══════════════════════════════════════════════════════
-   LEAFLET MAP
-══════════════════════════════════════════════════════ */
-const map = L.map('map',{zoomControl:true}).setView([38,-96],4);
-
-// Bing quadkey helper
-function bingUrl(coords){
-  let q='';
-  for(let i=coords.z;i>0;i--){
-    let d=0, m=1<<(i-1);
-    if(coords.x&m) d++;
-    if(coords.y&m) d+=2;
-    q+=d;
-  }
-  return `https://ecn.t3.tiles.virtualearth.net/tiles/a${q}.jpeg?g=1`;
-}
-
-class BingLayer extends L.TileLayer {
-  getTileUrl(coords){ return bingUrl(coords); }
-}
-
-const TILES = {
-  'osm':         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}),
-  'carto-light': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:20,attribution:'&copy; OSM &copy; CARTO'}),
-  'carto-dark':  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:20,attribution:'&copy; OSM &copy; CARTO'}),
-  'esri-sat':    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles &copy; Esri'}),
-  'bing-sat':    new BingLayer('',{maxZoom:19,attribution:'&copy; Microsoft Bing'}),
-};
-TILES['carto-dark'].addTo(map);
-
-document.getElementById('basemap').addEventListener('change',e=>{
-  Object.values(TILES).forEach(l=>{if(map.hasLayer(l))map.removeLayer(l);});
-  (TILES[e.target.value]||TILES['carto-dark']).addTo(map);
-});
-
-/* ══════════════════════════════════════════════════════
-   FAKE RADAR
-══════════════════════════════════════════════════════ */
-const RADAR_BANDS=[
-  [.10,[28,110,28,.20]], [.22,[50,195,50,.28]], [.35,[155,225,35,.32]],
-  [.48,[240,215,15,.36]], [.60,[255,155,15,.40]], [.72,[238,55,38,.44]],
-  [.86,[195,0,195,.48]],  [1.0,[255,80,255,.52]],
-];
-function radarRgba(v){
-  for(const[t,c]of RADAR_BANDS)if(v<=t)return c;
-  return RADAR_BANDS[RADAR_BANDS.length-1][1];
-}
-
-let rLayer=null, rTimer=null, rSeed=0;
-
-function makeRadarLayer(seed){
-  const gl=L.gridLayer({opacity:.88,zIndex:350,pane:'overlayPane'});
-  gl.createTile=coords=>{
-    const cv=document.createElement('canvas');
-    cv.width=cv.height=256;
-    const ctx=cv.getContext('2d');
-    let s=((coords.x*374761393)^(coords.y*668265263)^(coords.z*1442695041)^(seed*2246822519))>>>0;
-    function rnd(){s^=s<<13;s^=s>>>17;s^=s<<5;return(s>>>0)/4294967295;}
-
-    // Large blobs
-    for(let b=0;b<10+Math.floor(rnd()*12);b++){
-      const bx=rnd()*256,by=rnd()*256,bw=18+rnd()*55,bh=12+rnd()*40,v=.06+rnd()*.94;
-      const[r,g,bl,a]=radarRgba(v);
-      const mx=Math.max(bw,bh);
-      ctx.save();
-      ctx.translate(bx,by);
-      ctx.scale(bw/mx,bh/mx);
-      const grd=ctx.createRadialGradient(0,0,0,0,0,mx);
-      grd.addColorStop(0,`rgba(${r},${g},${bl},${a})`);
-      grd.addColorStop(.5,`rgba(${r},${g},${bl},${a*.55})`);
-      grd.addColorStop(1,`rgba(${r},${g},${bl},0)`);
-      ctx.fillStyle=grd;
-      ctx.beginPath();ctx.arc(0,0,mx,0,Math.PI*2);ctx.fill();
-      ctx.restore();
-    }
-    // Speckle cores
-    for(let i=0;i<300;i++){
-      const v2=rnd();if(v2<.66)continue;
-      const[r,g,bl,a]=radarRgba(v2);
-      ctx.fillStyle=`rgba(${r},${g},${bl},${Math.min(a*1.4,.65)})`;
-      ctx.fillRect(rnd()*256,rnd()*256,2+rnd()*5,1+rnd()*4);
-    }
-    // Scanlines
-    ctx.globalAlpha=.055;ctx.fillStyle='#fff';
-    for(let y=(seed*4)%7;y<256;y+=7)ctx.fillRect(0,y,256,1);
-    ctx.globalAlpha=1;
-    return cv;
-  };
-  return gl;
-}
-
-function stopRadar(){
-  if(rTimer){clearInterval(rTimer);rTimer=null;}
-  if(rLayer){map.removeLayer(rLayer);rLayer=null;}
-}
-
-document.getElementById('radarMode').addEventListener('change',e=>{
-  stopRadar();
-  if(e.target.value==='off')return;
-  rSeed=Math.floor(Math.random()*999999);
-  rLayer=makeRadarLayer(rSeed);rLayer.addTo(map);
-  if(e.target.value==='animate'){
-    rTimer=setInterval(()=>{
-      const old=rLayer;rSeed++;
-      rLayer=makeRadarLayer(rSeed);rLayer.addTo(map);
-      setTimeout(()=>{if(map.hasLayer(old))map.removeLayer(old);},100);
-    },260);
-  }
-});
-
-/* ══════════════════════════════════════════════════════
-   CENSUS TIGER DATA
-   Strategy:
-   1. TIGERweb REST API (Census Bureau official, CORS-enabled GeoJSON)
-   2. GitHub: loganpowell/census-geojson (CDN via jsDelivr)
-   3. GitHub: loganpowell/census-geojson (raw.githubusercontent)
-══════════════════════════════════════════════════════ */
-const FIPS_MAP={
-  'Alabama':'01','Alaska':'02','Arizona':'04','Arkansas':'05','California':'06',
-  'Colorado':'08','Connecticut':'09','Delaware':'10','District Of Columbia':'11',
-  'Florida':'12','Georgia':'13','Hawaii':'15','Idaho':'16','Illinois':'17',
-  'Indiana':'18','Iowa':'19','Kansas':'20','Kentucky':'21','Louisiana':'22',
-  'Maine':'23','Maryland':'24','Massachusetts':'25','Michigan':'26','Minnesota':'27',
-  'Mississippi':'28','Missouri':'29','Montana':'30','Nebraska':'31','Nevada':'32',
-  'New Hampshire':'33','New Jersey':'34','New Mexico':'35','New York':'36',
-  'North Carolina':'37','North Dakota':'38','Ohio':'39','Oklahoma':'40',
-  'Oregon':'41','Pennsylvania':'42','Rhode Island':'44','South Carolina':'45',
-  'South Dakota':'46','Tennessee':'47','Texas':'48','Utah':'49','Vermont':'50',
-  'Virginia':'51','Washington':'53','West Virginia':'54','Wisconsin':'55',
-  'Wyoming':'56','Puerto Rico':'72',
-};
-
-const ABBR_MAP={
-  AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',
-  CT:'Connecticut',DE:'Delaware',DC:'District Of Columbia',FL:'Florida',GA:'Georgia',
-  HI:'Hawaii',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',
-  LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',
-  MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',
-  NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',
-  OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',
-  SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',
-  WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming',PR:'Puerto Rico',
-};
-
-// In-memory cache per state FIPS
-const geoCache=new Map(); // fips → GeoJSON FeatureCollection
-const geoInFlight=new Map(); // fips → Promise
-
-async function fetchStateBoundaries(stateName){
-  const fips=FIPS_MAP[stateName];
-  if(!fips) throw new Error(`Unknown state: "${stateName}"`);
-
-  if(geoCache.has(fips)) return geoCache.get(fips);
-  if(geoInFlight.has(fips)) return geoInFlight.get(fips);
-
-  const promise=(async()=>{
-    // ── Source 1: Census Bureau Cartographic Boundary GeoJSON (direct, CORS-enabled) ──
-    // Official CB files at 500k scale, 2023 vintage. Proven CORS + GeoJSON format.
-    // https://www2.census.gov/geo/tiger/GENZ2023/json/
-    const cbUrl=`https://www2.census.gov/geo/tiger/GENZ2023/json/cb_2023_${fips}_county_500k.json`;
-
-    // ── Source 2: PublicaMundi / ArcGIS Hub open data ──
-    // US counties from ArcGIS Living Atlas, reliable CORS GeoJSON
-    const arcgisUrl=`https://opendata.arcgis.com/datasets/48f9af87daa241c4b267c5931ad3b226_0.geojson`;
-    // (this is all-US — we'll filter by state in findCounty if loaded)
-
-    // ── Source 3: TIGERweb ArcGIS REST — GeoJSON output, paginated ──
-    // Must use resultRecordCount and correct layer. Layer 86 = counties.
-    // Returns Esri FeatureCollection (features array) — same structure as GeoJSON.
-    const tigerUrl=
-      `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/86/query`+
-      `?where=${encodeURIComponent(`STATEFP='${fips}'`)}`+
-      `&outFields=NAME,STATEFP,COUNTYFP`+
-      `&returnGeometry=true&geometryPrecision=4&outSR=4326`+
-      `&resultRecordCount=200&f=geojson`;
-
-    // ── Source 4: Census cartographic boundary via their GeoJSON API ──
-    // Correct endpoint format: https://api.census.gov/data/... — no, that's tabular.
-    // Use the direct TIGER FTP GeoJSON mirror on data.census.gov CDN:
-    const censusCdnUrl=`https://raw.githubusercontent.com/deldersveld/topojson/master/countries/us-states/${fips}-geojson.json`;
-    // ^ per-state topojson-derived GeoJSON (counties)
-
-    // ── Source 5: Plotly's all-counties GeoJSON (single large file, cached after first load) ──
-    // We'll filter by FIPS prefix client-side.
-    const plotlyUrl=`https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json`;
-
-    const sources=[
-      // Per-state sources first (smaller, faster)
-      {
-        name:'Census CB 2023 (direct)',
-        fetch: async()=>{
-          const r=await fetch(cbUrl);
-          if(!r.ok) throw new Error(`HTTP ${r.status}`);
-          const j=await r.json();
-          return normalizeFC(j, stateName, fips);
-        }
-      },
-      {
-        name:'TIGERweb REST GeoJSON',
-        fetch: async()=>{
-          const r=await fetch(tigerUrl);
-          if(!r.ok) throw new Error(`HTTP ${r.status}`);
-          const j=await r.json();
-          // TIGERweb may return {features:[...]} without type field
-          if(j.error) throw new Error(j.error.message||'TIGERweb error');
-          return normalizeFC(j, stateName, fips);
-        }
-      },
-      {
-        // Plotly all-US file — large (~22MB) but reliable; filter by state FIPS prefix
-        name:'Plotly/Census all-US',
-        fetch: async()=>{
-          // Check if we already have a cached all-US file
-          if(window._plotlyAllUS){
-            return filterByFips(window._plotlyAllUS, fips);
-          }
-          log(`[${stateName}] Downloading all-US county file (~24MB, cached for later states)…`);
-          const r=await fetch(plotlyUrl);
-          if(!r.ok) throw new Error(`HTTP ${r.status}`);
-          const j=await r.json();
-          window._plotlyAllUS=j; // cache globally
-          return filterByFips(j, fips);
-        }
-      },
-    ];
-
-    let lastErr=null;
-    for(const src of sources){
-      try{
-        log(`[${stateName}] Trying ${src.name}…`);
-        const fc=await src.fetch();
-        if(!fc||!fc.features||!fc.features.length) throw new Error('Empty result');
-        geoCache.set(fips,fc);
-        geoInFlight.delete(fips);
-        log(`[${stateName}] ✓ Loaded ${fc.features.length} counties via ${src.name}`);
-        return fc;
-      }catch(e){
-        lastErr=e;
-        log(`[${stateName}] ${src.name} failed: ${e.message}`);
-      }
-    }
-    geoInFlight.delete(fips);
-    throw lastErr||new Error(`All sources failed for ${stateName}. Check your internet connection.`);
-  })();
-
-  geoInFlight.set(fips,promise);
-  return promise;
-}
-
-/* Normalize various response shapes into a standard FeatureCollection */
-function normalizeFC(json, stateName, fips){
-  let features;
-  if(json.type==='FeatureCollection' && Array.isArray(json.features)){
-    features=json.features;
-  } else if(Array.isArray(json.features)){
-    features=json.features; // TIGERweb omits "type" key sometimes
-  } else if(json.type==='Feature'){
-    features=[json];
-  } else {
-    throw new Error('Unexpected JSON structure: '+JSON.stringify(Object.keys(json)));
-  }
-  // Filter out features with no geometry
-  features=features.filter(f=>f&&f.geometry&&f.geometry.coordinates);
-  if(!features.length) throw new Error('No features with geometry');
-  return {type:'FeatureCollection', features};
-}
-
-/* Filter a all-US FeatureCollection (Plotly format) by state FIPS prefix */
-function filterByFips(allUS, stateFips){
-  const features=(allUS.features||[]).filter(f=>{
-    const id=String(f.id||f.properties?.FIPS||f.properties?.fips||f.properties?.GEO_ID||'');
-    // State FIPS is first 2 digits of 5-digit county FIPS
-    return id.padStart(5,'0').slice(0,2)===stateFips ||
-           String(f.properties?.STATE||'').padStart(2,'0')===stateFips;
-  });
-  return {type:'FeatureCollection', features};
-}
-
-const COUNTY_SUFFIX=/\s+(county|parish|borough|census area|municipality|city and borough|city|planning & development district|division|district)\s*$/i;
-
-function getPropNames(props){
-  return [
-    props.NAME, props.name, props.NAMELSAD, props.BASENAME,
-    props.county_name, props.GEO_NAME, props.COUNTY_NAME, props.Label,
-  ].filter(Boolean)
-   .map(n=>String(n).replace(COUNTY_SUFFIX,'').trim().toLowerCase());
-}
-
-function findCounty(fc, nameBase){
-  const needle=nameBase.trim().toLowerCase();
-
-  // Pass 1: exact match
-  for(const feat of fc.features){
-    if(getPropNames(feat.properties||{}).some(n=>n===needle)) return feat;
-  }
-  // Pass 2: starts-with or contains
-  let best=null, bestSc=-1;
-  for(const feat of fc.features){
-    for(const n of getPropNames(feat.properties||{})){
-      if(n===needle) return feat;
-      if(n===needle||n.startsWith(needle)||needle.startsWith(n)){
-        const sc=1-Math.abs(n.length-needle.length)/(Math.max(n.length,needle.length)+1);
-        if(sc>bestSc){bestSc=sc;best=feat;}
-      }
-    }
-  }
-  if(bestSc>=0.6) return best;
-  // Pass 3: any partial overlap (hyphenated names like Miami-Dade)
-  for(const feat of fc.features){
-    for(const n of getPropNames(feat.properties||{})){
-      if(n.includes(needle)||needle.includes(n)){
-        const sc=0.5*(1-Math.abs(n.length-needle.length)/(Math.max(n.length,needle.length)+1));
-        if(sc>bestSc){bestSc=sc;best=feat;}
-      }
-    }
-  }
-  return bestSc>0.3?best:null;
-}
-
-function featureRings(feat){
-  const geom=feat.geometry;
-  const rings=[];
-  const addPoly=coords=>{
-    const outer=coords[0];
-    if(!outer||outer.length<4)return;
-    rings.push(outer.map(([ln,la])=>L.latLng(la,ln)));
-  };
-  if(geom.type==='Polygon')addPoly(geom.coordinates);
-  else if(geom.type==='MultiPolygon')geom.coordinates.forEach(p=>addPoly(p));
-  return rings;
-}
-
-/* ══════════════════════════════════════════════════════
-   TEXT PARSING
-══════════════════════════════════════════════════════ */
-function tc(s){return String(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());}
-
-function resolveState(s){
-  const t=String(s||'').trim().replace(/\./g,'');
-  if(!t)return'';
-  const up=t.toUpperCase();
-  if(ABBR_MAP[up])return ABBR_MAP[up];
-  const tcase=tc(t);
-  for(const v of Object.values(ABBR_MAP))if(v.toLowerCase()===tcase.toLowerCase())return v;
-  return tc(t);
-}
-
-function isKnownState(name){
-  const n=String(name||'').toLowerCase();
-  return Object.values(ABBR_MAP).some(v=>v.toLowerCase()===n);
-}
-
-function stripDirs(s){
-  let r=String(s||'').trim().replace(/[._]+/g,' ').replace(/\s+/g,' ').trim();
-  const re=/^(?:the\s+)?(?:far\s+|upper\s+|lower\s+|central\s+|mid\s+|inner\s+|outer\s+)?(?:north(?:ern|east(?:ern)?|west(?:ern)?)?|south(?:ern|east(?:ern)?|west(?:ern)?)?|east(?:ern)?|west(?:ern)?|n\.?|s\.?|e\.?|w\.?|ne|nw|se|sw)\s+/i;
-  let prev;do{prev=r;r=r.replace(re,'').trim();}while(r!==prev);
-  return r.replace(/\b(area|region|portion|half|side|section)\b/ig,' ').replace(/\s+/g,' ').trim();
-}
-
-function parseLine(line,fallback){
-  let s=line.trim().replace(/\s+/g,' ');
-  if(!s)return null;
-  let cRaw='',stRaw='';
-
-  if(s.includes(',')){
-    const i=s.indexOf(',');
-    cRaw=s.slice(0,i).trim();stRaw=s.slice(i+1).trim();
-  }else{
-    const toks=s.split(' ');
-    let matched=false;
-    // Try longest state match first (e.g. "New York")
-    for(let len=3;len>=1;len--){
-      if(toks.length<=len)continue;
-      const cand=toks.slice(-len).join(' ');
-      const res=resolveState(cand);
-      if(isKnownState(res)){stRaw=cand;cRaw=toks.slice(0,-len).join(' ');matched=true;break;}
-    }
-    if(!matched){cRaw=s;stRaw='';}
-  }
-
-  const stateName=resolveState(stRaw||fallback||'');
-  const countyBase=tc(
-    stripDirs(cRaw)
-      .replace(/\s+county$/i,'')
-      .replace(/\s+parish$/i,'')
-      .replace(/\s+borough$/i,'')
-      .trim()
-  );
-  return{countyBase,stateName};
-}
-
-/* ══════════════════════════════════════════════════════
-   COUNTY SELECTION STATE
-══════════════════════════════════════════════════════ */
-const selected=new Map(); // key → {displayName,countyBase,stateName,rings,selLayer}
-const selFG=L.featureGroup().addTo(map);
-const alertFG=L.featureGroup().addTo(map);
-
-function cKey(cb,st){return`${cb.toLowerCase()}|${st.toLowerCase()}`;}
-
-function addSelLayer(item){
-  if(item.selLayer)selFG.removeLayer(item.selLayer);
-  const polys=item.rings.map(r=>L.polygon(r,{color:'#94a3b8',weight:1.5,fillColor:'#475569',fillOpacity:.10,dashArray:'5,4'}));
-  item.selLayer=L.featureGroup(polys);
-  selFG.addLayer(item.selLayer);
-}
-
-function renderList(){
-  const el=document.getElementById('cList');
-  document.getElementById('cCount').textContent=selected.size;
-  el.innerHTML='';
-  if(!selected.size){el.innerHTML='<div style="font-size:11px;color:var(--muted);padding:3px 0">None yet.</div>';return;}
-  for(const[k,it]of selected){
-    const chip=document.createElement('div');
-    chip.className='chip';
-    chip.innerHTML=`<div class="info"><b>${esc(it.displayName)}</b><small>${esc(it.stateName)}</small></div>
-      <div class="acts">
-        <button class="btn-ghost" data-act="zoom" data-k="${esc(k)}">Zoom</button>
-        <button class="btn-red" data-act="rm" data-k="${esc(k)}">✕</button>
-      </div>`;
-    chip.querySelectorAll('button').forEach(btn=>btn.addEventListener('click',()=>{
-      const it2=selected.get(btn.dataset.k);if(!it2)return;
-      if(btn.dataset.act==='zoom'){
-        map.fitBounds(L.featureGroup(it2.rings.map(r=>L.polygon(r))).getBounds(),{padding:[30,30]});
-      }else{
-        if(it2.selLayer)selFG.removeLayer(it2.selLayer);
-        selected.delete(btn.dataset.k);renderList();log(`Removed: ${it2.displayName}, ${it2.stateName}`);
-      }
-    }));
-    el.appendChild(chip);
-  }
-}
-
-/* ══════════════════════════════════════════════════════
-   ADD COUNTIES BUTTON
-══════════════════════════════════════════════════════ */
-document.getElementById('btnAdd').addEventListener('click',async()=>{
-  const raw=document.getElementById('countyBox').value;
-  const fb=resolveState(document.getElementById('defState').value);
-  const lines=raw.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  if(!lines.length){alert('Enter at least one county.');return;}
-
-  const btn=document.getElementById('btnAdd');
-  btn.innerHTML='<span class="spin"></span>Loading…';btn.disabled=true;
-  log(`Processing ${lines.length} line(s)…`);
-
-  for(const line of lines){
-    try{
-      const p=parseLine(line,fb);
-      if(!p||!p.countyBase){log(`Skip (empty county): "${line}"`);continue;}
-      if(!p.stateName||!isKnownState(p.stateName)){log(`Skip (unknown state): "${line}" — add ", STATE" or set Default State`);continue;}
-
-      log(`Looking up: ${p.countyBase} County, ${p.stateName}`);
-      const fc=await fetchStateBoundaries(p.stateName);
-      const feat=findCounty(fc,p.countyBase);
-      if(!feat){
-        // List what counties ARE available for debugging
-        const avail=(fc.features.slice(0,8).map(f=>(f.properties?.NAME||'?'))).join(', ');
-        log(`NOT FOUND: "${p.countyBase}" in ${p.stateName}. Available: ${avail}…`);
-        continue;
-      }
-
-      const rings=featureRings(feat);
-      if(!rings.length){log(`No polygon: ${p.countyBase}, ${p.stateName}`);continue;}
-
-      const rawName=feat.properties?.NAME||feat.properties?.name||p.countyBase;
-      const displayName=rawName.toLowerCase().includes('county')?rawName:rawName+' County';
-      const k=cKey(p.countyBase,p.stateName);
-
-      const item=selected.get(k)||{countyBase:p.countyBase,stateName:p.stateName,rings,selLayer:null};
-      item.displayName=displayName;item.rings=rings;
-      selected.set(k,item);
-      addSelLayer(item);
-      log(`✓ ${displayName}, ${p.stateName}`);
-    }catch(e){
-      log(`ERROR "${line}": ${e.message}`);
-    }
-  }
-
-  renderList();
-  btn.innerHTML='＋ Add Counties';btn.disabled=false;
-});
-
-/* ══════════════════════════════════════════════════════
-   ISSUE ALERT
-══════════════════════════════════════════════════════ */
-let activeAlert=null;
-
-function clearAlert(){
-  if(activeAlert){
-    if(activeAlert.timer)clearInterval(activeAlert.timer);
-    alertFG.clearLayers();
-    activeAlert=null;
-  }
-}
-
-document.getElementById('btnIssue').addEventListener('click',()=>{
-  if(!selected.size){alert('Add at least one county first.');return;}
-  clearAlert();
-
-  const type=document.getElementById('alertType').value;
-  const pds=document.getElementById('pds').checked;
-  const headline=document.getElementById('headline').value.trim();
-  const def=DEFS[type]||DEFS.TOR_WARN;
-  const {color,flash}=alertColors(type,pds);
-
-  const layers=[];
-  for(const it of selected.values()){
-    it.rings.forEach(ring=>{
-      const poly=L.polygon(ring,{color,fillColor:color,fillOpacity:.35,weight:3.5,interactive:true});
-      const tipText=`<b>${def.label}${pds?' (PDS)':''}</b>${headline?'<br/>'+headline:''}`;
-      poly.bindTooltip(tipText,{sticky:true});
-      alertFG.addLayer(poly);
-      layers.push(poly);
-    });
-  }
-
-  if(layers.length) map.fitBounds(alertFG.getBounds(),{padding:[30,30]});
-
-  let timer=null;
-  if(flash){
-    let ph=true;
-    timer=setInterval(()=>{
-      ph=!ph;const c=flash[ph?0:1];
-      layers.forEach(l=>l.setStyle({color:c,fillColor:c}));
-    },450);
-  }
-
-  activeAlert={layers,timer};
-  log(`Issued: ${def.label}${pds?' (PDS)':''} · ${selected.size} county/counties${headline?' · '+headline:''}`);
-});
-
-document.getElementById('btnClearAlert').addEventListener('click',()=>{clearAlert();log('Alert cleared.');});
-document.getElementById('btnRemAll').addEventListener('click',()=>{selected.clear();selFG.clearLayers();renderList();log('Removed all counties.');});
-document.getElementById('btnResetAll').addEventListener('click',()=>{clearAlert();selected.clear();selFG.clearLayers();alertFG.clearLayers();renderList();log('Reset all.');});
-document.getElementById('btnFit').addEventListener('click',()=>{
-  if(!selected.size){alert('No counties selected.');return;}
-  if(selFG.getLayers().length)map.fitBounds(selFG.getBounds(),{padding:[30,30]});
-});
-
-/* ══════════════════════════════════════════════════════
-   HELPERS
-══════════════════════════════════════════════════════ */
-const logEl=document.getElementById('log');
-function log(msg){
-  const t=new Date().toLocaleTimeString('en-US',{hour12:false});
-  logEl.textContent=`[${t}] ${msg}\n`+logEl.textContent;
-}
-function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-
-renderList();
-</script>
+    <!-- Active alerts list -->
+    <div class="col">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="lbl">Active Alerts (<span id="aCount">0</span>)</div>
+        <button class="btn-ghost btn-sm" id="btnClearAll">Clear All</button>
+      </div>
+      <div class="a-list" id="aList">
+        <div style="font-size:10.5px;color:var(--muted);padding:2px 0">No active alerts.</div>
+      </div>
+    </div>
+
+    <hr/>
+
+    <!-- Debug log -->
+    <div class="col">
+      <div class="lbl">Log</div>
+      <div class="log-box" id="log">Ready. County boundaries load from U.S. Census TIGER on first use.</div>
+    </div>
+
+  </div><!-- /.p-body -->
+</div><!-- /.panel -->
+
+
+<script src="app.js"></script>
 </body>
 </html>

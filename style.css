@@ -1,0 +1,285 @@
+/* ── Variables ── */
+    :root {
+      --bg:     #07090f;
+      --panel:  rgba(9, 12, 22, .97);
+      --text:   #eef2ff;
+      --muted:  rgba(170, 190, 255, .55);
+      --border: rgba(255, 255, 255, .08);
+      --field:  rgba(255, 255, 255, .055);
+      --radius: 11px;
+      --shadow: 0 20px 60px rgba(0, 0, 0, .8);
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); overflow: hidden; }
+    #map { position: absolute; inset: 0; z-index: 0; }
+
+    /* ── Panel shell ── */
+    .panel {
+      position: absolute;
+      z-index: 1200;
+      top: 10px;
+      left: 10px;
+      width: min(470px, calc(100vw - 20px));
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 20px);
+    }
+
+    /* ── Panel header ── */
+    .p-head {
+      padding: 8px 12px 7px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .p-head h1   { font-size: 12.5px; font-weight: 900; letter-spacing: .5px; color: #fff; }
+    .p-head small { font-size: 9.5px; color: var(--muted); font-weight: 600; }
+
+    /* ── Swatch + progress ── */
+    #swatch    { height: 3px; border-radius: 0; transition: background .25s; flex-shrink: 0; }
+    #prog-wrap { height: 2px; background: transparent; overflow: hidden; flex-shrink: 0; }
+    #prog      { height: 100%; background: #3b82f6; width: 0%; transition: width .3s; }
+
+    /* ── Panel body ── */
+    .p-body {
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+    .p-body::-webkit-scrollbar       { width: 3px; }
+    .p-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 2px; }
+
+    /* ── Layout helpers ── */
+    .row { display: flex; gap: 5px; align-items: flex-end; flex-wrap: wrap; }
+    .col { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .lbl {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--muted);
+      letter-spacing: .6px;
+      text-transform: uppercase;
+      margin-bottom: 1px;
+    }
+
+    /* ── Form controls ── */
+    select, input, button, textarea {
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--field);
+      color: var(--text);
+      font-size: 11.5px;
+      font-weight: 700;
+      outline: none;
+      transition: border-color .15s, background .15s;
+    }
+    select:focus, input:focus, textarea:focus {
+      border-color: rgba(100, 150, 255, .5);
+      background: rgba(255, 255, 255, .08);
+    }
+    select, input  { height: 31px; padding: 0 8px; width: 100%; }
+    textarea       { width: 100%; padding: 6px 8px; resize: vertical; line-height: 1.4; font-size: 11.5px; }
+    button         { height: 31px; padding: 0 10px; cursor: pointer; white-space: nowrap; font-size: 11.5px; }
+    button:disabled              { opacity: .45; cursor: not-allowed; }
+    button:active:not(:disabled) { filter: brightness(.82); }
+
+    /* ── Button variants ── */
+    .btn-blue  { background: #1d4ed8; border-color: rgba(29,  78, 216, .5); color: #fff; }
+    .btn-green { background: #065f46; border-color: rgba(6,   95,  70, .5); color: #6ee7b7; }
+    .btn-red   { background: #991b1b; border-color: rgba(153, 27,  27, .5); color: #fca5a5; }
+    .btn-ghost { background: var(--field); }
+    .btn-blue:hover:not(:disabled)  { background: #1e40af; }
+    .btn-green:hover:not(:disabled) { background: #064e3b; }
+    .btn-red:hover:not(:disabled)   { background: #7f1d1d; }
+    .btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,.1); }
+    .btn-sm    { height: 24px; font-size: 10.5px; padding: 0 7px; border-radius: 5px; }
+
+    /* ── PDS pill toggle ── */
+    .pds-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      height: 31px;
+      padding: 0 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--field);
+      cursor: pointer;
+      user-select: none;
+      font-size: 11.5px;
+      font-weight: 800;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .pds-pill input { width: 13px; height: 13px; accent-color: #7c3aed; cursor: pointer; flex-shrink: 0; }
+    .pds-pill.on    { border-color: rgba(124, 58, 237, .65); background: rgba(124, 58, 237, .18); }
+
+    /* ── Misc layout ── */
+    hr   { border: none; border-top: 1px solid var(--border); margin: 1px 0; }
+    .hint { font-size: 10px; color: var(--muted); line-height: 1.5; }
+
+    /* ── County chip list ── */
+    .c-list, .a-list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-height: 130px;
+      overflow-y: auto;
+    }
+    .c-list::-webkit-scrollbar,
+    .a-list::-webkit-scrollbar       { width: 3px; }
+    .c-list::-webkit-scrollbar-thumb,
+    .a-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      background: rgba(255,255,255,.035);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 7px;
+    }
+    .chip .info,
+    .a-chip .ainfo {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-width: 0;
+      flex: 1;
+    }
+    .chip .info b,
+    .a-chip .ainfo b     { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chip .info small,
+    .a-chip .ainfo small { font-size: 9.5px; color: var(--muted); }
+    .chip .acts,
+    .a-chip .acts        { display: flex; gap: 3px; flex-shrink: 0; }
+
+    /* ── Active alert chip ── */
+    .a-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      border-left: 3px solid;
+      border-radius: 0 6px 6px 0;
+      background: rgba(255,255,255,.035);
+      padding: 4px 7px;
+    }
+
+    /* ── PDS flash animations (border color) ── */
+    @keyframes fl-yp  { 0%,49% { border-color: #ffd700; } 50%,100% { border-color: #7e22ce; } }
+    @keyframes fl-op  { 0%,49% { border-color: #ff7a00; } 50%,100% { border-color: #7e22ce; } }
+    @keyframes fl-lop { 0%,49% { border-color: #ffb36b; } 50%,100% { border-color: #7e22ce; } }
+    .fl-yp  { animation: fl-yp  .9s step-end infinite; }
+    .fl-op  { animation: fl-op  .9s step-end infinite; }
+    .fl-lop { animation: fl-lop .9s step-end infinite; }
+
+    /* ── Debug log ── */
+    .log-box {
+      font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+      max-height: 80px;
+      overflow-y: auto;
+      background: rgba(0,0,0,.25);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 7px;
+      color: var(--muted);
+    }
+    .log-box::-webkit-scrollbar       { width: 3px; }
+    .log-box::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+    .log-ok   { color: #4ade80; }
+    .log-err  { color: #f87171; }
+    .log-warn { color: #fbbf24; }
+
+    /* ── Loading spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin {
+      display: inline-block;
+      width: 11px; height: 11px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+
+    /* ── Leaflet tooltip override ── */
+    .leaflet-tooltip {
+      background:      rgba(9,12,22,.92)           !important;
+      border:          1px solid rgba(255,255,255,.15) !important;
+      color:           #eef2ff                     !important;
+      font-size:       12px                        !important;
+      font-weight:     700                         !important;
+      border-radius:   6px                         !important;
+      padding:         5px 9px                     !important;
+      box-shadow:      0 4px 16px rgba(0,0,0,.5)  !important;
+      backdrop-filter: blur(8px)                   !important;
+    }
+
+    /* ── Mode tabs (Counties / Draw Polygon) ── */
+    .mode-tabs {
+      display: flex;
+      gap: 0;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .mode-tab {
+      flex: 1;
+      height: 31px;
+      border: none;
+      border-radius: 0;
+      background: var(--field);
+      color: var(--muted);
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+    .mode-tab + .mode-tab {
+      border-left: 1px solid var(--border);
+    }
+    .mode-tab.active {
+      background: #1d4ed8;
+      color: #fff;
+    }
+    .mode-tab:hover:not(.active) {
+      background: rgba(255,255,255,.1);
+      color: var(--text);
+    }
+
+    /* ── Draw toolbar ── */
+    .draw-toolbar {
+      gap: 5px;
+    }
+    .draw-toolbar button {
+      flex: 1;
+    }
+
+    /* ── Draw cursor on map ── */
+    .leaflet-draw-active {
+      cursor: crosshair !important;
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 500px) {
+      .panel { left: 6px; right: 6px; width: auto; top: 6px; max-height: calc(100vh - 12px); }
+    }
