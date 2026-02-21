@@ -724,8 +724,6 @@ document.getElementById('btnAdd').addEventListener('click', async () => {
    ISSUE ALERT BUTTON
 ═══════════════════════════════════════════════════════════ */
 document.getElementById('btnIssue').addEventListener('click', () => {
-  if (!selected.size) { alert('Add at least one county first.'); return; }
-
   const type     = document.getElementById('alertType').value;
   const pds      = document.getElementById('pds').checked;
   const headline = document.getElementById('headline').value.trim();
@@ -733,22 +731,56 @@ document.getElementById('btnIssue').addEventListener('click', () => {
   const { color, flash } = alertColors(type, pds);
 
   const layers  = [];
-  const counties = [];
+  let   counties = [];
 
-  for (const it of selected.values()) {
-    counties.push(it.displayName);
-    it.rings.forEach(ring => {
-      const poly = L.polygon(ring, {
-        color, fillColor: color,
-        fillOpacity: def.fillOp || .32,
-        weight: 3, interactive: true,
-      });
-      const tipHTML = `<b>${def.label}${pds ? ' (PDS)' : ''}</b>`
-        + (headline ? `<br/><span style="color:${color}">${headline}</span>` : '');
-      poly.bindTooltip(tipHTML, { sticky: true });
-      alertFG.addLayer(poly);
-      layers.push(poly);
+  /* ── Polygon mode ── */
+  if (shapeMode === 'polygon') {
+    if (drawVerts.length < 3) {
+      alert('Draw a polygon first (at least 3 points). Use "Start Drawing" then double-click to close.');
+      return;
+    }
+    // If still drawing, close it now
+    if (drawActive) closePolygon();
+
+    const poly = L.polygon(drawVerts, {
+      color, fillColor: color,
+      fillOpacity: def.fillOp || .32,
+      weight: 3, interactive: true,
     });
+    const tipHTML = `<b>${def.label}${pds ? ' (PDS)' : ''}</b>`
+      + (headline ? `<br/><span style="color:${color}">${headline}</span>` : '');
+    poly.bindTooltip(tipHTML, { sticky: true });
+    alertFG.addLayer(poly);
+    layers.push(poly);
+    counties = ['Custom polygon'];
+
+    // Clear the draw canvas so a new polygon can be started
+    clearDrawPreview();
+    drawVerts = [];
+    document.getElementById('btnDrawUndo').disabled  = true;
+    document.getElementById('btnDrawClear').disabled = true;
+    document.getElementById('drawVertexCount').style.display = 'none';
+    updateDrawHint();
+
+  /* ── County mode ── */
+  } else {
+    if (!selected.size) { alert('Add at least one county first.'); return; }
+
+    for (const it of selected.values()) {
+      counties.push(it.displayName);
+      it.rings.forEach(ring => {
+        const poly = L.polygon(ring, {
+          color, fillColor: color,
+          fillOpacity: def.fillOp || .32,
+          weight: 3, interactive: true,
+        });
+        const tipHTML = `<b>${def.label}${pds ? ' (PDS)' : ''}</b>`
+          + (headline ? `<br/><span style="color:${color}">${headline}</span>` : '');
+        poly.bindTooltip(tipHTML, { sticky: true });
+        alertFG.addLayer(poly);
+        layers.push(poly);
+      });
+    }
   }
 
   if (layers.length) map.fitBounds(alertFG.getBounds(), { padding: [30, 30] });
@@ -766,8 +798,215 @@ document.getElementById('btnIssue').addEventListener('click', () => {
   const id = ++alertIdSeq;
   activeAlerts.push({ id, type, pds, label: def.label, color, flash, layers, timer, counties, headline });
   renderAList();
-  log(`Issued: ${def.label}${pds ? ' (PDS)' : ''} * ${counties.length} county/counties${headline ? ' * ' + headline : ''}`, 'ok');
+  const shapeDesc = shapeMode === 'polygon' ? 'custom polygon' : `${counties.length} county/counties`;
+  log(`Issued: ${def.label}${pds ? ' (PDS)' : ''} * ${shapeDesc}${headline ? ' * ' + headline : ''}`, 'ok');
 });
+
+
+/* ═══════════════════════════════════════════════════════════
+   SHAPE MODE — Counties vs Draw Polygon
+═══════════════════════════════════════════════════════════ */
+let shapeMode = 'county';  // 'county' | 'polygon'
+
+document.querySelectorAll('.mode-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    shapeMode = btn.dataset.mode;
+    document.querySelectorAll('.mode-tab').forEach(b => b.classList.toggle('active', b === btn));
+
+    const countySection = document.getElementById('countyBox').closest('.col');
+    const countyRow     = document.getElementById('defState').closest('.row');
+    const hintEl        = countySection.nextElementSibling;  // .hint below textarea
+    const selectedCol   = document.getElementById('cList').closest('.col');
+    const drawSection   = document.getElementById('drawSection');
+
+    if (shapeMode === 'county') {
+      countySection.style.display  = '';
+      countyRow.style.display      = '';
+      hintEl.style.display         = '';
+      selectedCol.style.display    = '';
+      drawSection.style.display    = 'none';
+      stopDrawing();
+    } else {
+      countySection.style.display  = 'none';
+      countyRow.style.display      = 'none';
+      hintEl.style.display         = 'none';
+      selectedCol.style.display    = 'none';
+      drawSection.style.display    = '';
+    }
+  });
+});
+
+
+/* ═══════════════════════════════════════════════════════════
+   POLYGON DRAW ENGINE
+   Click to place vertices, double-click to close.
+   Live preview line follows the cursor.
+═══════════════════════════════════════════════════════════ */
+let drawActive    = false;   // currently placing points?
+let drawVerts     = [];      // array of L.LatLng
+let drawPolyline  = null;    // live preview polyline
+let drawPolygon   = null;    // completed/preview polygon fill
+let drawGhostLine = null;    // rubber-band line cursor→last vert
+let drawFG        = L.featureGroup().addTo(map);
+
+function updateDrawHint() {
+  const hint  = document.getElementById('drawHint');
+  const count = document.getElementById('drawVertexCount');
+  const n     = drawVerts.length;
+
+  if (!drawActive) {
+    hint.textContent  = 'Click on the map to place polygon points. Double-click to close.';
+    count.style.display = 'none';
+    return;
+  }
+
+  if (n === 0) {
+    hint.textContent = 'Click anywhere on the map to place the first point.';
+  } else if (n < 3) {
+    hint.textContent = `${n} point${n > 1 ? 's' : ''} placed — keep clicking to add more.`;
+  } else {
+    hint.textContent = `${n} points — click to continue, double-click to close polygon.`;
+  }
+
+  count.style.display = '';
+  count.textContent   = `${n} vertex${n !== 1 ? 'es' : ''}`;
+}
+
+function redrawPreview() {
+  // Remove old preview layers
+  if (drawPolyline) { drawFG.removeLayer(drawPolyline); drawPolyline = null; }
+  if (drawPolygon)  { drawFG.removeLayer(drawPolygon);  drawPolygon  = null; }
+
+  if (drawVerts.length < 2) return;
+
+  // Dashed outline polyline
+  drawPolyline = L.polyline(drawVerts, {
+    color: '#60a5fa', weight: 2, dashArray: '6,4', interactive: false,
+  });
+  drawFG.addLayer(drawPolyline);
+
+  // Filled polygon preview (when 3+ points)
+  if (drawVerts.length >= 3) {
+    drawPolygon = L.polygon(drawVerts, {
+      color: '#60a5fa', weight: 2, fillColor: '#60a5fa', fillOpacity: .12,
+      dashArray: '6,4', interactive: false,
+    });
+    drawFG.addLayer(drawPolygon);
+  }
+}
+
+function updateGhostLine(mouseLatLng) {
+  if (drawGhostLine) { drawFG.removeLayer(drawGhostLine); drawGhostLine = null; }
+  if (!drawActive || drawVerts.length === 0) return;
+
+  drawGhostLine = L.polyline([drawVerts[drawVerts.length - 1], mouseLatLng], {
+    color: '#60a5fa', weight: 1.5, dashArray: '4,4', opacity: .6, interactive: false,
+  });
+  drawFG.addLayer(drawGhostLine);
+}
+
+function startDrawing() {
+  drawActive = true;
+  drawVerts  = [];
+  clearDrawPreview();
+  map.getContainer().classList.add('leaflet-draw-active');
+  document.getElementById('btnDrawUndo').disabled  = true;
+  document.getElementById('btnDrawClear').disabled = true;
+  document.getElementById('btnDrawStart').textContent = '⏹ Stop Drawing';
+  updateDrawHint();
+  log('Draw mode active — click map to place points, double-click to close.', 'ok');
+}
+
+function stopDrawing() {
+  drawActive = false;
+  if (drawGhostLine) { drawFG.removeLayer(drawGhostLine); drawGhostLine = null; }
+  map.getContainer().classList.remove('leaflet-draw-active');
+  const btn = document.getElementById('btnDrawStart');
+  if (btn) btn.textContent = '✎ Start Drawing';
+  updateDrawHint();
+}
+
+function clearDrawPreview() {
+  if (drawPolyline) { drawFG.removeLayer(drawPolyline); drawPolyline = null; }
+  if (drawPolygon)  { drawFG.removeLayer(drawPolygon);  drawPolygon  = null; }
+  if (drawGhostLine){ drawFG.removeLayer(drawGhostLine);drawGhostLine= null; }
+}
+
+function clearDraw() {
+  stopDrawing();
+  drawVerts = [];
+  clearDrawPreview();
+  document.getElementById('btnDrawUndo').disabled  = true;
+  document.getElementById('btnDrawClear').disabled = true;
+  document.getElementById('drawVertexCount').style.display = 'none';
+  updateDrawHint();
+  log('Polygon cleared.');
+}
+
+function closePolygon() {
+  if (drawVerts.length < 3) {
+    log('Need at least 3 points to close a polygon.', 'warn');
+    return false;
+  }
+  stopDrawing();
+  redrawPreview();
+  document.getElementById('btnDrawClear').disabled = false;
+  log(`Polygon closed with ${drawVerts.length} vertices.`, 'ok');
+  updateDrawHint();
+  return true;
+}
+
+/* Map click — place a vertex */
+map.on('click', e => {
+  if (!drawActive) return;
+  drawVerts.push(e.latlng);
+  redrawPreview();
+  if (drawGhostLine) { drawFG.removeLayer(drawGhostLine); drawGhostLine = null; }
+  document.getElementById('btnDrawUndo').disabled  = false;
+  document.getElementById('btnDrawClear').disabled = false;
+  updateDrawHint();
+});
+
+/* Map double-click — close polygon */
+map.on('dblclick', e => {
+  if (!drawActive) return;
+  L.DomEvent.stop(e);  // prevent map zoom
+  // The click before dblclick already added a point — remove the duplicate
+  if (drawVerts.length > 1) drawVerts.pop();
+  closePolygon();
+});
+
+/* Mouse move — rubber-band ghost line */
+map.on('mousemove', e => {
+  if (!drawActive) return;
+  updateGhostLine(e.latlng);
+});
+
+/* Draw toolbar buttons */
+document.getElementById('btnDrawStart').addEventListener('click', () => {
+  if (drawActive) {
+    // Stop was clicked — close if enough points, otherwise just stop
+    if (drawVerts.length >= 3) {
+      closePolygon();
+    } else {
+      stopDrawing();
+      log('Drawing stopped.');
+    }
+  } else {
+    startDrawing();
+  }
+});
+
+document.getElementById('btnDrawUndo').addEventListener('click', () => {
+  if (!drawVerts.length) return;
+  drawVerts.pop();
+  redrawPreview();
+  updateDrawHint();
+  if (!drawVerts.length) document.getElementById('btnDrawUndo').disabled = true;
+  log(`Undid last point. ${drawVerts.length} remaining.`);
+});
+
+document.getElementById('btnDrawClear').addEventListener('click', clearDraw);
 
 
 /* ═══════════════════════════════════════════════════════════
