@@ -279,6 +279,28 @@
       cursor: crosshair !important;
     }
 
+    /* ── Panel collapse ── */
+    .panel.collapsed .p-body,
+    .panel.collapsed #swatch,
+    .panel.collapsed #prog-wrap {
+      display: none;
+    }
+    .panel.collapsed {
+      max-height: none;
+    }
+    #btnCollapse {
+      font-size: 16px;
+      line-height: 1;
+      padding: 0 6px;
+      height: 26px;
+      flex-shrink: 0;
+      transform: rotate(0deg);
+      transition: transform .2s;
+    }
+    .panel.collapsed #btnCollapse {
+      transform: rotate(180deg);
+    }
+
     /* ── Mobile ── */
     @media (max-width: 500px) {
       .panel { left: 6px; right: 6px; width: auto; top: 6px; max-height: calc(100vh - 12px); }
