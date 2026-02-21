@@ -269,39 +269,55 @@ function isKnownState(n) {
 
 /* ═══════════════════════════════════════════════════════════
    CENSUS TIGER GeoJSON FETCH
-   Source priority:
-     1. Census CB 2023 per-state JSON  (direct, CORS, ~1–3 MB)
-     2. Census CB 2022 per-state JSON  (prior vintage fallback)
-     3. TIGERweb ArcGIS REST GeoJSON   (per-state, CORS)
-     4. Plotly all-US county file      (~24 MB, filter client-side, cached globally)
+   Source priority (each has a 10 s timeout):
+     1. ArcGIS Living Atlas — small per-state GeoJSON, very fast CDN
+     2. Census CB 2023 per-state JSON
+     3. TIGERweb ArcGIS REST GeoJSON
+     4. Plotly all-US (~24 MB, filtered + name-enriched, cached globally)
 ═══════════════════════════════════════════════════════════ */
-const geoCache  = new Map();  // fips → FeatureCollection
-const inFlight  = new Map();  // fips → Promise
+const geoCache = new Map();  // fips → FeatureCollection
+const inFlight = new Map();  // fips → Promise
+
+/* Fetch with a hard timeout — returns rejected promise after ms */
+function fetchTimeout(url, ms = 10000) {
+  const ctrl = new AbortController();
+  const tid   = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal })
+    .finally(() => clearTimeout(tid));
+}
 
 async function getStateFC(stateName) {
   const fips = FIPS[stateName];
   if (!fips) throw new Error(`Unknown state "${stateName}"`);
-  if (geoCache.has(fips))  return geoCache.get(fips);
-  if (inFlight.has(fips))  return inFlight.get(fips);
+  if (geoCache.has(fips)) return geoCache.get(fips);
+  if (inFlight.has(fips)) return inFlight.get(fips);
 
   const p = (async () => {
 
-    /* Three per-state sources tried in order */
     const sources = [
+      /* ── 1. ArcGIS Living Atlas — fast CDN, small files, good CORS ── */
       {
-        name: 'Census CB 2023',
-        url:  `https://www2.census.gov/geo/tiger/GENZ2023/json/cb_2023_${fips}_county_500k.json`,
+        name:    'ArcGIS Living Atlas',
+        timeout: 10000,
+        url:     `https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Counties/FeatureServer/0/query`
+                 + `?where=${encodeURIComponent(`STATE_FIPS='${fips}'`)}`
+                 + `&outFields=NAME,STATE_FIPS,FIPS`
+                 + `&returnGeometry=true&geometryPrecision=4&outSR=4326&resultRecordCount=200&f=geojson`,
       },
+      /* ── 2. Census Cartographic Boundary 2023 — official, ~1–3 MB ── */
       {
-        name: 'Census CB 2022',
-        url:  `https://www2.census.gov/geo/tiger/GENZ2022/json/cb_2022_${fips}_county_500k.json`,
+        name:    'Census CB 2023',
+        timeout: 15000,
+        url:     `https://www2.census.gov/geo/tiger/GENZ2023/json/cb_2023_${fips}_county_500k.json`,
       },
+      /* ── 3. TIGERweb REST — official, CORS, per-state ── */
       {
-        name: 'TIGERweb REST',
-        url:  `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/86/query`
-              + `?where=${encodeURIComponent("STATEFP='" + fips + "'")}`
-              + `&outFields=NAME,STATEFP,COUNTYFP`
-              + `&returnGeometry=true&geometryPrecision=5&outSR=4326&resultRecordCount=200&f=geojson`,
+        name:    'TIGERweb REST',
+        timeout: 12000,
+        url:     `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Current/MapServer/86/query`
+                 + `?where=${encodeURIComponent(`STATEFP='${fips}'`)}`
+                 + `&outFields=NAME,STATEFP,COUNTYFP`
+                 + `&returnGeometry=true&geometryPrecision=4&outSR=4326&resultRecordCount=200&f=geojson`,
       },
     ];
 
@@ -311,82 +327,73 @@ async function getStateFC(stateName) {
       try {
         log(`[${stateName}] Trying ${src.name}...`);
         setProgress(20);
-        const r = await fetch(src.url);
+        const r = await fetchTimeout(src.url, src.timeout);
         setProgress(65);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const j = await r.json();
         if (j.error) throw new Error(j.error.message || 'API error');
         const fc = toFC(j);
-        if (!fc?.features?.length) throw new Error('Empty');
+        if (!fc?.features?.length) throw new Error('Empty result');
         setProgress(100);
         geoCache.set(fips, fc);
         inFlight.delete(fips);
-        log(`[${stateName}] OK: ${fc.features.length} counties via ${src.name}`, 'ok');
+        log(`[${stateName}] Loaded ${fc.features.length} counties via ${src.name}`, 'ok');
         setTimeout(() => setProgress(0), 500);
         return fc;
       } catch(e) {
         lastErr = e;
-        log(`[${stateName}] ${src.name} failed: ${e.message}`, 'err');
+        const reason = e.name === 'AbortError' ? 'timed out' : e.message;
+        log(`[${stateName}] ${src.name} failed: ${reason}`, 'err');
         setProgress(0);
       }
     }
 
-    /* Plotly all-US fallback — large file, filter by state FIPS, cached globally.
-       IMPORTANT: Plotly features have empty properties {}, so we inject NAME from
-       the 5-digit county FIPS ID using the Census FIPS→name API before caching. */
+    /* ── 4. Plotly all-US fallback (~24 MB, cached, name-enriched) ── */
     try {
-      log(`[${stateName}] Trying Plotly all-US (large file, cached)...`, 'warn');
+      log(`[${stateName}] Trying Plotly all-US fallback (large file)...`, 'warn');
       setProgress(10);
       if (!window.__pAllUS) {
-        const r = await fetch('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json');
+        const r = await fetchTimeout(
+          'https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json',
+          30000
+        );
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         window.__pAllUS = await r.json();
       }
       setProgress(50);
 
-      // Filter to this state's counties
       const feats = (window.__pAllUS.features || []).filter(f => {
-        const id = String(f.id || '').padStart(5, '0');
-        return id.slice(0, 2) === fips;
+        return String(f.id || '').padStart(5, '0').slice(0, 2) === fips;
       });
-      if (!feats.length) throw new Error('No features for state FIPS ' + fips);
+      if (!feats.length) throw new Error('No features for FIPS ' + fips);
 
-      // Plotly features have empty properties — enrich with county names
-      // via the Census Bureau geocoder API (returns name for each county FIPS)
-      // Build a FIPS→name map from the Census ACS NAME API
+      /* Plotly features have empty properties — enrich via Census ACS name API */
       let fipsToName = {};
       try {
         const nameUrl = `https://api.census.gov/data/2022/acs/acs5?get=NAME&for=county:*&in=state:${fips}`;
-        const nr = await fetch(nameUrl);
+        const nr = await fetchTimeout(nameUrl, 8000);
         if (nr.ok) {
-          const rows = await nr.json(); // [["NAME","state","county"], ["Fulton County, Georgia","13","121"], ...]
+          const rows = await nr.json();
           for (const row of rows.slice(1)) {
-            const countyFips = fips + String(row[2]).padStart(3, '0');
-            // NAME is like "Fulton County, Georgia" — take part before the comma
-            const nameRaw = String(row[0]).split(',')[0].trim();
-            fipsToName[countyFips] = nameRaw;
+            const key     = fips + String(row[2]).padStart(3, '0');
+            fipsToName[key] = String(row[0]).split(',')[0].trim();
           }
         }
       } catch(ne) {
-        log(`[${stateName}] Census name lookup failed: ${ne.message}`, 'warn');
+        log(`[${stateName}] Name enrichment failed: ${ne.message}`, 'warn');
       }
 
-      // Inject NAME into each feature's properties
       const enriched = feats.map(f => {
-        const id = String(f.id || '').padStart(5, '0');
+        const id   = String(f.id || '').padStart(5, '0');
         const name = fipsToName[id] || '';
-        return {
-          ...f,
-          properties: { ...( f.properties || {} ), NAME: name, NAMELSAD: name },
-        };
+        return { ...f, properties: { ...(f.properties || {}), NAME: name, NAMELSAD: name } };
       });
 
-      setProgress(90);
-      const fc = { type: 'FeatureCollection', features: enriched };
       setProgress(100);
+      const fc = { type: 'FeatureCollection', features: enriched };
       geoCache.set(fips, fc);
       inFlight.delete(fips);
-      log(`[${stateName}] OK: ${fc.features.length} counties via Plotly + Census names`, 'ok');
+      log(`[${stateName}] Loaded ${fc.features.length} counties via Plotly fallback`, 'ok');
       setTimeout(() => setProgress(0), 500);
       return fc;
     } catch(e) {
