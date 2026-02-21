@@ -35,7 +35,12 @@ function chipFlashClass(type, pds) {
   return '';
 }
 
-/* ── Swatch + PDS pill reactivity ── */
+/* ── Panel collapse toggle ── */
+document.getElementById('btnCollapse').addEventListener('click', () => {
+  document.querySelector('.panel').classList.toggle('collapsed');
+});
+
+
 function refreshSwatch() {
   const { color } = alertColors(
     document.getElementById('alertType').value,
